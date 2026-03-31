@@ -3,17 +3,17 @@ import { IsString, IsNotEmpty, IsNumber, IsOptional } from 'class-validator';
 export class CreateSavedPlaceDto {
   @IsString()
   @IsNotEmpty()
-  label: string;
+  label!: string;
 
   @IsString()
   @IsNotEmpty()
-  address: string;
+  address!: string;
 
   @IsNumber()
-  latitude: number;
+  latitude!: number;
 
   @IsNumber()
-  longitude: number;
+  longitude!: number;
 }
 
 export class UpdateSavedPlaceDto {

@@ -32,10 +32,14 @@ export class JwtAuthService {
     role: string,
     deviceInfo?: string,
   ): Promise<TokenPair> {
+    // Generate unique session token
+    const sessionToken = `${userId}_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    
     // Create session
     const session = await this.prisma.session.create({
       data: {
         userId,
+        token: sessionToken,
         deviceInfo: deviceInfo || 'Unknown',
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
       },
@@ -77,10 +81,19 @@ export class JwtAuthService {
         throw new UnauthorizedException('Invalid refresh token');
       }
 
-      // Get session
+      // Get session with user relations to determine role
       const session = await this.prisma.session.findUnique({
         where: { id: sessionId },
-        include: { user: true },
+        include: { 
+          user: {
+            include: {
+              admin: true,
+              driver: true,
+              employee: true,
+              consumer: true,
+            }
+          }
+        },
       });
 
       if (!session || session.expiresAt < new Date()) {
@@ -88,11 +101,17 @@ export class JwtAuthService {
         throw new UnauthorizedException('Session expired');
       }
 
+      // Determine user role from relations
+      let userRole = 'CONSUMER'; // default
+      if (session.user.admin) userRole = 'ADMIN';
+      else if (session.user.driver) userRole = 'DRIVER';
+      else if (session.user.employee) userRole = 'EMPLOYEE';
+
       // Generate new tokens
       return this.generateTokens(
         session.userId,
-        session.user.role,
-        session.deviceInfo,
+        userRole,
+        session.deviceInfo as string,
       );
     } catch (error) {
       throw new UnauthorizedException('Invalid refresh token');

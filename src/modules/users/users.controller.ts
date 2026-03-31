@@ -29,7 +29,15 @@ export class UsersController {
     @CurrentUser('id') userId: string,
     @Body() updateProfileDto: UpdateProfileDto,
   ) {
-    return this.usersService.updateProfile(userId, updateProfileDto);
+    // Convert dateOfBirth string to Date if provided
+    const updateData = {
+      ...updateProfileDto,
+      dateOfBirth: updateProfileDto.dateOfBirth 
+        ? new Date(updateProfileDto.dateOfBirth) 
+        : undefined,
+    };
+    
+    return this.usersService.updateProfile(userId, updateData);
   }
 
   @Get('saved-places')

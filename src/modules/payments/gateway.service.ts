@@ -88,7 +88,7 @@ export class PaymentGatewayService {
       this.logger.error('Bankily payment initiation failed:', error);
       return {
         success: false,
-        error: error.message,
+        error: (error as Error).message,
       };
     }
   }
@@ -144,7 +144,7 @@ export class PaymentGatewayService {
       this.logger.error('Sedad payment initiation failed:', error);
       return {
         success: false,
-        error: error.message,
+        error: (error as Error).message,
       };
     }
   }
@@ -200,7 +200,7 @@ export class PaymentGatewayService {
       this.logger.error('Masrvi payment initiation failed:', error);
       return {
         success: false,
-        error: error.message,
+        error: (error as Error).message,
       };
     }
   }

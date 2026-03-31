@@ -6,5 +6,5 @@ export class SendOtpDto {
   @Matches(/^\+222\d{8}$/, {
     message: 'Phone number must be in format +222XXXXXXXX (Mauritanian format)',
   })
-  phoneNumber: string;
+  phoneNumber!: string;
 }

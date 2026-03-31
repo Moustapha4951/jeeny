@@ -99,7 +99,7 @@ export class PaymentsService {
           status: 'FAILED',
           rideId: ride.id,
           paymentMethod: 'WALLET',
-          description: `Failed payment for ride ${ride.id}: ${error.message}`,
+          description: `Failed payment for ride ${ride.id}: ${(error as Error).message}`,
         },
       });
 

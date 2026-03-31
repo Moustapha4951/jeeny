@@ -15,10 +15,7 @@ export class WebhooksController {
 
   @Post('bankily')
   @Public()
-  async handleBankilyWebhook(
-    @Body() payload: any,
-    @Headers('x-bankily-signature') signature: string,
-  ) {
+  async handleBankilyWebhook(@Body() payload: any) {
     this.logger.log('Received Bankily webhook');
 
     // Verify webhook signature
@@ -51,10 +48,7 @@ export class WebhooksController {
 
   @Post('sedad')
   @Public()
-  async handleSedadWebhook(
-    @Body() payload: any,
-    @Headers('x-sedad-signature') signature: string,
-  ) {
+  async handleSedadWebhook(@Body() payload: any) {
     this.logger.log('Received Sedad webhook');
 
     // Verify webhook signature
@@ -87,10 +81,7 @@ export class WebhooksController {
 
   @Post('masrvi')
   @Public()
-  async handleMasrviWebhook(
-    @Body() payload: any,
-    @Headers('x-masrvi-signature') signature: string,
-  ) {
+  async handleMasrviWebhook(@Body() payload: any) {
     this.logger.log('Received Masrvi webhook');
 
     // Verify webhook signature
@@ -123,7 +114,7 @@ export class WebhooksController {
 
   private async processPaymentWebhook(
     gateway: string,
-    transactionId: string,
+    _transactionId: string,
     referenceId: string,
     success: boolean,
   ) {
@@ -188,19 +179,19 @@ export class WebhooksController {
     }
   }
 
-  private verifyBankilySignature(payload: any): boolean {
+  private verifyBankilySignature(_payload: any): boolean {
     // Implement Bankily signature verification
     // This is a placeholder - actual implementation depends on Bankily's signature algorithm
     return true;
   }
 
-  private verifySedadSignature(payload: any): boolean {
+  private verifySedadSignature(_payload: any): boolean {
     // Implement Sedad signature verification
     // This is a placeholder - actual implementation depends on Sedad's signature algorithm
     return true;
   }
 
-  private verifyMasrviSignature(payload: any): boolean {
+  private verifyMasrviSignature(_payload: any): boolean {
     // Implement Masrvi signature verification
     // This is a placeholder - actual implementation depends on Masrvi's signature algorithm
     return true;

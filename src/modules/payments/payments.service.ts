@@ -172,11 +172,6 @@ export class PaymentsService {
       throw new BadRequestException('Only completed transactions can be refunded');
     }
 
-    // Check if already refunded
-    if (transaction.status === 'REFUNDED') {
-      throw new BadRequestException('Transaction already refunded');
-    }
-
     try {
       const amount = Number(transaction.amount);
       const ride = transaction.rides[0];

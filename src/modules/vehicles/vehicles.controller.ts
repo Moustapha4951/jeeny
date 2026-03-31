@@ -2,7 +2,6 @@ import { Controller, Get, Param, Query, Post, Body, UseGuards } from '@nestjs/co
 import { VehiclesService } from './vehicles.service';
 import { AuthGuard } from '../auth/auth.guard';
 import { CreateVehicleDto } from './dto/create-vehicle.dto';
-import { UpdateVehicleDto } from './dto/update-vehicle.dto';
 
 @Controller('vehicles')
 @UseGuards(AuthGuard)

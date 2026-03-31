@@ -2,7 +2,6 @@ import { Controller, Get, Param, Query, Post, Body, UseGuards } from '@nestjs/co
 import { IntercityService } from './intercity.service';
 import { AuthGuard } from '../auth/auth.guard';
 import { CreateIntercityTripDto } from './dto/create-intercity-trip.dto';
-import { UpdateIntercityTripDto } from './dto/update-intercity-trip.dto';
 
 @Controller('intercity')
 @UseGuards(AuthGuard)

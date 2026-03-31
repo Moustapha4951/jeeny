@@ -1,71 +1,52 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Body,
-  Query,
-  UseGuards,
-} from '@nestjs/common';
-import { AdminsService } from '../users/admins.service';
+import { Controller, Get, Post, Put, Param, Body, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
-import { CurrentUser } from '../auth/decorators/current-user.decorator';
-import { ApproveDriverDto, RejectDriverDto, SuspendDriverDto } from './dto/driver-approval.dto';
+import { AdminService } from './admin.service';
 
 @Controller('admin')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('ADMIN', 'SUPER_ADMIN')
 export class AdminController {
-  constructor(private adminsService: AdminsService) {}
+  constructor(private adminService: AdminService) {}
 
-  @Get('drivers/pending')
-  async getPendingDrivers() {
-    return this.adminsService.getPendingDrivers();
+  @Get('dashboard')
+  async getDashboardStats() {
+    return this.adminService.getDashboardStats();
   }
 
   @Get('drivers')
-  async getAllDrivers(@Query('status') status?: string) {
-    return this.adminsService.getAllDrivers(status);
+  async getAllDrivers() {
+    return this.adminService.getAllDrivers();
   }
 
-  @Post('drivers/approve')
-  async approveDriver(
-    @Body() approveDriverDto: ApproveDriverDto,
-    @CurrentUser('id') adminId: string,
-  ) {
-    return this.adminsService.approveDriver(
-      approveDriverDto.driverId,
-      adminId,
-    );
+  @Get('drivers/:id')
+  async getDriverById(@Param('id') id: string) {
+    return this.adminService.getDriverById(id);
   }
 
-  @Post('drivers/reject')
-  async rejectDriver(
-    @Body() rejectDriverDto: RejectDriverDto,
-    @CurrentUser('id') adminId: string,
-  ) {
-    return this.adminsService.rejectDriver(
-      rejectDriverDto.driverId,
-      adminId,
-      rejectDriverDto.reason,
-    );
+  @Post('drivers/:id/approve')
+  async approveDriver(@Param('id') id: string) {
+    return this.adminService.approveDriver(id);
   }
 
-  @Post('drivers/suspend')
-  async suspendDriver(
-    @Body() suspendDriverDto: SuspendDriverDto,
-    @CurrentUser('id') adminId: string,
-  ) {
-    return this.adminsService.suspendDriver(
-      suspendDriverDto.driverId,
-      adminId,
-      suspendDriverDto.reason,
-    );
+  @Post('drivers/:id/reject')
+  async rejectDriver(@Param('id') id: string, @Body('reason') reason: string) {
+    return this.adminService.rejectDriver(id, reason);
   }
 
-  @Get('users')
-  async getAllUsers() {
-    return this.adminsService.getAllUsers();
+  @Post('drivers/:id/suspend')
+  async suspendDriver(@Param('id') id: string, @Body('reason') reason: string) {
+    return this.adminService.suspendDriver(id, reason);
+  }
+
+  @Get('rides')
+  async getAllRides() {
+    return this.adminService.getAllRides();
+  }
+
+  @Get('rides/:id')
+  async getRideById(@Param('id') id: string) {
+    return this.adminService.getRideById(id);
   }
 }

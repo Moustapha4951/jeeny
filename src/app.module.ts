@@ -8,17 +8,11 @@ import { RedisModule } from './redis/redis.module';
 import { FirebaseModule } from './firebase/firebase.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
-// import { RidesModule } from './modules/rides/rides.module';
 import { WalletModule } from './modules/wallet/wallet.module';
 import { PaymentsModule } from './modules/payments/payments.module';
-// import { SettingsModule } from './modules/settings/settings.module';
-// import { WebsocketModule } from './modules/websocket/websocket.module';
-// import { AdminModule } from './modules/admin/admin.module';
-// import { EmployeesModule } from './modules/employees/employees.module';
-// import { DriversModule } from './modules/drivers/drivers.module';
+import { AdminModule } from './modules/admin/admin.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
-// import { SettingsService } from './modules/settings/settings.service';
 import { validate } from './config/env.validation';
 
 @Module({
@@ -35,6 +29,7 @@ import { validate } from './config/env.validation';
     UsersModule,
     WalletModule,
     PaymentsModule,
+    AdminModule,
   ],
   controllers: [AppController],
   providers: [

@@ -1,26 +1,26 @@
-import { IsString, IsNotEmpty, IsNumber, IsOptional } from 'class-validator';
+import { IsString, IsNotEmpty, IsNumber } from 'class-validator';
 
 export class AcceptRideDto {
   @IsString()
   @IsNotEmpty()
-  rideId: string;
+  rideId!: string;
 }
 
 export class CompleteRideDto {
   @IsString()
   @IsNotEmpty()
-  rideId: string;
+  rideId!: string;
 
   @IsNumber()
-  actualDistance: number;
+  actualDistance!: number;
 }
 
 export class CancelRideDto {
   @IsString()
   @IsNotEmpty()
-  rideId: string;
+  rideId!: string;
 
   @IsString()
   @IsNotEmpty()
-  reason: string;
+  reason!: string;
 }

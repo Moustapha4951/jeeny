@@ -3,27 +3,27 @@ import { IsString, IsNotEmpty, IsNumber, IsOptional, IsDateString, IsIn } from '
 export class CreateRideDto {
   @IsString()
   @IsNotEmpty()
-  vehicleTypeId: string;
+  vehicleTypeId!: string;
 
   @IsString()
   @IsNotEmpty()
-  pickupAddress: string;
+  pickupAddress!: string;
 
   @IsNumber()
-  pickupLatitude: number;
+  pickupLatitude!: number;
 
   @IsNumber()
-  pickupLongitude: number;
+  pickupLongitude!: number;
 
   @IsString()
   @IsNotEmpty()
-  dropoffAddress: string;
+  dropoffAddress!: string;
 
   @IsNumber()
-  dropoffLatitude: number;
+  dropoffLatitude!: number;
 
   @IsNumber()
-  dropoffLongitude: number;
+  dropoffLongitude!: number;
 
   @IsString()
   @IsOptional()
@@ -31,7 +31,7 @@ export class CreateRideDto {
 
   @IsString()
   @IsIn(['WALLET', 'CASH', 'CARD'])
-  paymentMethod: string;
+  paymentMethod!: string;
 
   @IsDateString()
   @IsOptional()

@@ -23,17 +23,18 @@ export class PayoutsService {
       },
     });
 
-    const totalEarnings = rides.reduce((sum, ride) => sum + (ride.driverEarnings || 0), 0);
+    const totalFares = rides.reduce((sum, ride) => sum + Number(ride.finalFare || 0), 0);
     const totalRides = rides.length;
-    const platformFees = rides.reduce((sum, ride) => sum + (ride.platformFee || 0), 0);
+    const platformCommission = totalFares * 0.15; // 15% platform fee
+    const driverEarnings = totalFares - platformCommission;
 
     return {
       driverId,
       period: { startDate, endDate },
       totalRides,
-      totalEarnings,
-      platformFees,
-      netEarnings: totalEarnings,
+      totalFares,
+      platformCommission,
+      driverEarnings,
     };
   }
 
@@ -41,17 +42,35 @@ export class PayoutsService {
     // Check driver wallet balance
     const wallet = await this.walletService.getWallet(driverId);
     
-    if (wallet.balance < amount) {
+    if (Number(wallet.balance) < amount) {
       throw new BadRequestException('Insufficient balance for payout');
     }
 
-    // Create payout record
-    const payout = await this.prisma.payout.create({
+    // Create transaction for payout
+    const transaction = await this.prisma.transaction.create({
       data: {
-        driverId,
+        userId: driverId,
+        type: 'DRIVER_PAYOUT',
         amount,
         status: 'PENDING',
-        requestedBy: adminId,
+        description: `Driver payout request`,
+      },
+    });
+
+    // Create payout record
+    const payout = await this.prisma.driverPayout.create({
+      data: {
+        driverId,
+        transactionId: transaction.id,
+        amount,
+        periodStart: new Date(),
+        periodEnd: new Date(),
+        totalRides: 0,
+        grossEarnings: amount,
+        commission: 0,
+        method: 'BANK_TRANSFER',
+        status: 'PENDING',
+        processedById: adminId,
       },
     });
 
@@ -60,8 +79,9 @@ export class PayoutsService {
   }
 
   async processPayout(payoutId: string, adminId: string) {
-    const payout = await this.prisma.payout.findUnique({
+    const payout = await this.prisma.driverPayout.findUnique({
       where: { id: payoutId },
+      include: { transaction: true },
     });
 
     if (!payout) {
@@ -76,18 +96,24 @@ export class PayoutsService {
       // Debit driver wallet
       await this.walletService.debitBalance(
         payout.driverId,
-        payout.amount,
+        Number(payout.amount),
         `Payout ${payoutId}`,
         payoutId,
       );
 
+      // Update transaction status
+      await this.prisma.transaction.update({
+        where: { id: payout.transactionId },
+        data: { status: 'COMPLETED', processedAt: new Date(), processedById: adminId },
+      });
+
       // Update payout status
-      const updatedPayout = await this.prisma.payout.update({
+      const updatedPayout = await this.prisma.driverPayout.update({
         where: { id: payoutId },
         data: {
           status: 'COMPLETED',
           processedAt: new Date(),
-          processedBy: adminId,
+          processedById: adminId,
         },
       });
 
@@ -96,12 +122,9 @@ export class PayoutsService {
     } catch (error) {
       this.logger.error(`Payout ${payoutId} processing failed:`, error);
       
-      await this.prisma.payout.update({
+      await this.prisma.driverPayout.update({
         where: { id: payoutId },
-        data: {
-          status: 'FAILED',
-          failureReason: error.message,
-        },
+        data: { status: 'FAILED' },
       });
 
       throw error;
@@ -109,22 +132,27 @@ export class PayoutsService {
   }
 
   async getDriverPayouts(driverId: string) {
-    return this.prisma.payout.findMany({
+    return this.prisma.driverPayout.findMany({
       where: { driverId },
+      include: { transaction: true },
       orderBy: { createdAt: 'desc' },
     });
   }
 
   async getPendingPayouts() {
-    return this.prisma.payout.findMany({
+    return this.prisma.driverPayout.findMany({
       where: { status: 'PENDING' },
       include: {
         driver: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            phoneNumber: true,
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                phone: true,
+              },
+            },
           },
         },
       },

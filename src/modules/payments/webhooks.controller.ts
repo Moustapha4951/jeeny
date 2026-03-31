@@ -1,9 +1,7 @@
 import { Controller, Post, Body, Headers, Logger, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { WalletService } from '../wallet/wallet.service';
-import { PaymentGatewayService } from './gateway.service';
 import { Public } from '../auth/decorators/public.decorator';
-import * as crypto from 'crypto';
 
 @Controller('webhooks')
 export class WebhooksController {
@@ -13,7 +11,6 @@ export class WebhooksController {
   constructor(
     private prisma: PrismaService,
     private walletService: WalletService,
-    private gatewayService: PaymentGatewayService,
   ) {}
 
   @Post('bankily')
@@ -25,7 +22,7 @@ export class WebhooksController {
     this.logger.log('Received Bankily webhook');
 
     // Verify webhook signature
-    if (!this.verifyBankilySignature(payload, signature)) {
+    if (!this.verifyBankilySignature(payload)) {
       throw new BadRequestException('Invalid signature');
     }
 
@@ -41,7 +38,6 @@ export class WebhooksController {
         'BANKILY',
         payload.transactionId,
         payload.reference,
-        payload.amount,
         payload.status === 'SUCCESS',
       );
 
@@ -62,7 +58,7 @@ export class WebhooksController {
     this.logger.log('Received Sedad webhook');
 
     // Verify webhook signature
-    if (!this.verifySedadSignature(payload, signature)) {
+    if (!this.verifySedadSignature(payload)) {
       throw new BadRequestException('Invalid signature');
     }
 
@@ -78,7 +74,6 @@ export class WebhooksController {
         'SEDAD',
         payload.transactionId,
         payload.merchantReference,
-        payload.amount,
         payload.status === 'COMPLETED',
       );
 
@@ -99,7 +94,7 @@ export class WebhooksController {
     this.logger.log('Received Masrvi webhook');
 
     // Verify webhook signature
-    if (!this.verifyMasrviSignature(payload, signature)) {
+    if (!this.verifyMasrviSignature(payload)) {
       throw new BadRequestException('Invalid signature');
     }
 
@@ -115,7 +110,6 @@ export class WebhooksController {
         'MASRVI',
         payload.paymentId,
         payload.orderId,
-        payload.amount / 100, // Convert from cents
         payload.status === 'PAID',
       );
 
@@ -131,11 +125,10 @@ export class WebhooksController {
     gateway: string,
     transactionId: string,
     referenceId: string,
-    amount: number,
     success: boolean,
   ) {
-    // Find the payment record
-    const payment = await this.prisma.payment.findFirst({
+    // Find the transaction record
+    const transaction = await this.prisma.transaction.findFirst({
       where: {
         OR: [
           { id: referenceId },
@@ -144,66 +137,70 @@ export class WebhooksController {
         status: 'PENDING',
       },
       include: {
-        ride: true,
+        rides: true,
       },
     });
 
-    if (!payment) {
-      this.logger.warn(`Payment not found for reference ${referenceId}`);
+    if (!transaction) {
+      this.logger.warn(`Transaction not found for reference ${referenceId}`);
       return;
     }
 
     if (success) {
-      // Update payment status
-      await this.prisma.payment.update({
-        where: { id: payment.id },
+      // Update transaction status
+      await this.prisma.transaction.update({
+        where: { id: transaction.id },
         data: {
           status: 'COMPLETED',
-          gatewayTransactionId: transactionId,
-          gateway,
+          paymentGateway: gateway,
+          processedAt: new Date(),
         },
       });
 
       // Credit driver wallet if ride payment
-      if (payment.ride?.driverId && payment.ride?.driverEarnings) {
+      const ride = transaction.rides[0];
+      if (ride?.driverId) {
+        const finalFare = Number(ride.finalFare || 0);
+        const platformCommission = finalFare * 0.15;
+        const driverEarnings = finalFare - platformCommission;
+        
         await this.walletService.creditBalance(
-          payment.ride.driverId,
-          payment.ride.driverEarnings,
-          `Earnings from ride ${payment.rideId}`,
-          payment.id,
+          ride.driverId,
+          driverEarnings,
+          `Earnings from ride ${transaction.rideId}`,
+          transaction.id,
         );
       }
 
-      this.logger.log(`Payment ${payment.id} completed via ${gateway}`);
+      this.logger.log(`Transaction ${transaction.id} completed via ${gateway}`);
     } else {
-      // Update payment status to failed
-      await this.prisma.payment.update({
-        where: { id: payment.id },
+      // Update transaction status to failed
+      await this.prisma.transaction.update({
+        where: { id: transaction.id },
         data: {
           status: 'FAILED',
-          gatewayTransactionId: transactionId,
-          gateway,
-          failureReason: 'Payment failed at gateway',
+          paymentGateway: gateway,
+          description: 'Payment failed at gateway',
         },
       });
 
-      this.logger.log(`Payment ${payment.id} failed via ${gateway}`);
+      this.logger.log(`Transaction ${transaction.id} failed via ${gateway}`);
     }
   }
 
-  private verifyBankilySignature(payload: any, signature: string): boolean {
+  private verifyBankilySignature(payload: any): boolean {
     // Implement Bankily signature verification
     // This is a placeholder - actual implementation depends on Bankily's signature algorithm
     return true;
   }
 
-  private verifySedadSignature(payload: any, signature: string): boolean {
+  private verifySedadSignature(payload: any): boolean {
     // Implement Sedad signature verification
     // This is a placeholder - actual implementation depends on Sedad's signature algorithm
     return true;
   }
 
-  private verifyMasrviSignature(payload: any, signature: string): boolean {
+  private verifyMasrviSignature(payload: any): boolean {
     // Implement Masrvi signature verification
     // This is a placeholder - actual implementation depends on Masrvi's signature algorithm
     return true;

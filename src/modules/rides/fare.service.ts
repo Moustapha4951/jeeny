@@ -33,16 +33,16 @@ export class FareService {
     }
 
     // Calculate base components
-    const baseFare = vehicleType.baseFare;
-    const distanceFare = distanceKm * vehicleType.perKmRate;
-    const timeFare = durationMinutes * vehicleType.perMinuteRate;
+    const baseFare = Number(vehicleType.basePrice);
+    const distanceFare = distanceKm * Number(vehicleType.pricePerKm);
+    const timeFare = durationMinutes * Number(vehicleType.pricePerMin);
 
     // Calculate subtotal before surge
     let subtotal = baseFare + distanceFare + timeFare;
 
     // Apply minimum fare
-    if (subtotal < vehicleType.minimumFare) {
-      subtotal = vehicleType.minimumFare;
+    if (subtotal < Number(vehicleType.minFare)) {
+      subtotal = Number(vehicleType.minFare);
     }
 
     // Apply surge pricing
@@ -70,7 +70,7 @@ export class FareService {
   }
 
   async calculatePromoDiscount(promoCode: string, subtotal: number): Promise<number> {
-    const promo = await this.prisma.promo.findUnique({
+    const promo = await this.prisma.promoCode.findUnique({
       where: { code: promoCode },
     });
 
@@ -80,7 +80,7 @@ export class FareService {
 
     // Check if promo is valid
     const now = new Date();
-    if (promo.startDate > now || promo.endDate < now) {
+    if (promo.validFrom > now || promo.validUntil < now) {
       return 0;
     }
 
@@ -89,23 +89,25 @@ export class FareService {
     }
 
     // Check usage limits
-    if (promo.maxUses && promo.usedCount >= promo.maxUses) {
+    if (promo.usageLimit && promo.usageCount >= promo.usageLimit) {
       return 0;
     }
 
     // Calculate discount
     let discount = 0;
-    if (promo.discountType === 'PERCENTAGE') {
-      discount = (subtotal * promo.discountValue) / 100;
-      if (promo.maxDiscountAmount && discount > promo.maxDiscountAmount) {
-        discount = promo.maxDiscountAmount;
+    const promoValue = Number(promo.value);
+    
+    if (promo.type === 'PERCENTAGE') {
+      discount = (subtotal * promoValue) / 100;
+      if (promo.maxDiscount && discount > Number(promo.maxDiscount)) {
+        discount = Number(promo.maxDiscount);
       }
-    } else if (promo.discountType === 'FIXED') {
-      discount = promo.discountValue;
+    } else if (promo.type === 'FIXED_AMOUNT') {
+      discount = promoValue;
     }
 
     // Check minimum order amount
-    if (promo.minOrderAmount && subtotal < promo.minOrderAmount) {
+    if (promo.minRideAmount && subtotal < Number(promo.minRideAmount)) {
       return 0;
     }
 
@@ -164,7 +166,7 @@ export class FareService {
 
     for (const zone of zones) {
       if (this.isPointInPolygon(latitude, longitude, zone.polygon as any)) {
-        return zone.surgeMultiplier || 1.0;
+        return Number(zone.surgeMultiplier) || 1.0;
       }
     }
 

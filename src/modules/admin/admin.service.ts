@@ -432,4 +432,49 @@ export class AdminService {
       },
     };
   }
+
+  async estimateFare(estimateData: any) {
+    const { pickupLat, pickupLng, dropoffLat, dropoffLng } = estimateData;
+
+    // Calculate distance (Haversine formula)
+    const R = 6371; // Earth radius in km
+    const dLat = ((dropoffLat - pickupLat) * Math.PI) / 180;
+    const dLon = ((dropoffLng - pickupLng) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((pickupLat * Math.PI) / 180) *
+        Math.cos((dropoffLat * Math.PI) / 180) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    const distanceKm = R * c;
+
+    // Estimate duration (assuming 30 km/h average speed)
+    const durationMin = Math.ceil((distanceKm / 30) * 60);
+
+    // Get default vehicle type for pricing
+    const defaultVehicleType = await this.prisma.vehicleType.findFirst({
+      where: { isActive: true },
+      orderBy: { basePrice: 'asc' },
+    });
+
+    let estimatedFare = 100; // Default fallback
+    if (defaultVehicleType) {
+      estimatedFare =
+        Number(defaultVehicleType.basePrice) +
+        Number(defaultVehicleType.pricePerKm) * distanceKm +
+        Number(defaultVehicleType.pricePerMin) * durationMin;
+
+      // Apply minimum fare
+      if (estimatedFare < Number(defaultVehicleType.minFare)) {
+        estimatedFare = Number(defaultVehicleType.minFare);
+      }
+    }
+
+    return {
+      estimatedFare: Number(estimatedFare.toFixed(0)),
+      distanceKm: Number(distanceKm.toFixed(2)),
+      durationMin,
+    };
+  }
 }

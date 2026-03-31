@@ -62,4 +62,10 @@ export class AdminController {
   async bookRideForCustomer(@Body() bookingData: any) {
     return this.adminService.bookRideForCustomer(bookingData);
   }
+
+  // Fare estimation endpoint (public for testing)
+  @Post('callcenter/estimate')
+  async estimateFare(@Body() estimateData: any) {
+    return this.adminService.estimateFare(estimateData);
+  }
 }

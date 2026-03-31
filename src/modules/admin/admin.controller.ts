@@ -56,4 +56,10 @@ export class AdminController {
   async getRideById(@Param('id') id: string) {
     return this.adminService.getRideById(id);
   }
+
+  // Call center booking endpoint (public for testing)
+  @Post('callcenter/book')
+  async bookRideForCustomer(@Body() bookingData: any) {
+    return this.adminService.bookRideForCustomer(bookingData);
+  }
 }

@@ -289,3 +289,148 @@ export class AdminService {
     return statusMap[status] || status;
   }
 }
+
+
+  async bookRideForCustomer(bookingData: any) {
+    const {
+      customerPhone,
+      pickupAddress,
+      dropoffAddress,
+      pickupLat,
+      pickupLng,
+      dropoffLat,
+      dropoffLng,
+      manualFare,
+      vehicleTypeId,
+    } = bookingData;
+
+    // Find or create consumer by phone
+    let consumer = await this.prisma.consumer.findFirst({
+      where: {
+        user: {
+          phone: customerPhone,
+        },
+      },
+      include: {
+        user: true,
+      },
+    });
+
+    // If consumer doesn't exist, create one
+    if (!consumer) {
+      const user = await this.prisma.user.create({
+        data: {
+          phone: customerPhone,
+          phoneVerified: true,
+          firstName: 'عميل',
+          lastName: 'جديد',
+        },
+      });
+
+      consumer = await this.prisma.consumer.create({
+        data: {
+          userId: user.id,
+        },
+        include: {
+          user: true,
+        },
+      });
+
+      // Create wallet for new consumer
+      await this.prisma.wallet.create({
+        data: {
+          userId: user.id,
+          type: 'CONSUMER',
+          balance: 0,
+        },
+      });
+    }
+
+    // Get default vehicle type if not provided
+    let selectedVehicleTypeId = vehicleTypeId;
+    if (!selectedVehicleTypeId) {
+      const defaultVehicleType = await this.prisma.vehicleType.findFirst({
+        where: { isActive: true },
+        orderBy: { basePrice: 'asc' },
+      });
+      selectedVehicleTypeId = defaultVehicleType?.id;
+    }
+
+    if (!selectedVehicleTypeId) {
+      return {
+        success: false,
+        message: 'لا يوجد نوع مركبة متاح',
+      };
+    }
+
+    // Calculate distance (simple Haversine formula)
+    const R = 6371; // Earth radius in km
+    const dLat = ((dropoffLat - pickupLat) * Math.PI) / 180;
+    const dLon = ((dropoffLng - pickupLng) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((pickupLat * Math.PI) / 180) *
+        Math.cos((dropoffLat * Math.PI) / 180) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    const distanceKm = R * c;
+
+    // Estimate duration (assuming 30 km/h average speed)
+    const durationMin = Math.ceil((distanceKm / 30) * 60);
+
+    // Calculate fare or use manual fare
+    let estimatedFare = manualFare;
+    if (!estimatedFare) {
+      const vehicleType = await this.prisma.vehicleType.findUnique({
+        where: { id: selectedVehicleTypeId },
+      });
+      
+      if (vehicleType) {
+        estimatedFare =
+          Number(vehicleType.basePrice) +
+          Number(vehicleType.pricePerKm) * distanceKm +
+          Number(vehicleType.pricePerMin) * durationMin;
+        
+        // Apply minimum fare
+        if (estimatedFare < Number(vehicleType.minFare)) {
+          estimatedFare = Number(vehicleType.minFare);
+        }
+      } else {
+        estimatedFare = 100; // Default fallback
+      }
+    }
+
+    // Create ride
+    const ride = await this.prisma.ride.create({
+      data: {
+        consumerId: consumer.id,
+        vehicleTypeId: selectedVehicleTypeId,
+        pickupLat,
+        pickupLng,
+        pickupAddress,
+        dropoffLat,
+        dropoffLng,
+        dropoffAddress,
+        distanceKm,
+        durationMin,
+        estimatedFare,
+        finalFare: manualFare || null,
+        status: 'SEARCHING',
+        bookingSource: 'CALL_CENTER',
+        paymentMethod: 'CASH',
+      },
+    });
+
+    return {
+      success: true,
+      message: 'تم إنشاء الرحلة بنجاح',
+      ride: {
+        id: ride.id,
+        rideNumber: ride.rideNumber,
+        estimatedFare: Number(ride.estimatedFare),
+        distanceKm: Number(ride.distanceKm),
+        durationMin: ride.durationMin,
+      },
+    };
+  }

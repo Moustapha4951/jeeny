@@ -100,12 +100,47 @@ export class AdminService {
     const driver = await this.prisma.driver.findUnique({
       where: { id },
       include: {
-        user: true,
+        user: {
+          select: {
+            id: true,
+            phone: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            avatar: true,
+          },
+        },
         vehicles: true,
       },
     });
 
-    return driver;
+    if (!driver) {
+      return null;
+    }
+
+    return {
+      id: driver.id,
+      userId: driver.userId,
+      phone: driver.user.phone,
+      name: `${driver.user.firstName} ${driver.user.lastName}`,
+      firstName: driver.user.firstName,
+      lastName: driver.user.lastName,
+      email: driver.user.email,
+      avatar: driver.user.avatar,
+      status: driver.status,
+      isOnline: driver.isOnline,
+      isOnTrip: driver.isOnTrip,
+      rating: Number(driver.rating),
+      totalTrips: driver.totalTrips,
+      totalEarnings: Number(driver.totalEarnings),
+      licenseNumber: driver.licenseNumber,
+      nationalId: driver.nationalId,
+      city: driver.city,
+      address: driver.address,
+      createdAt: driver.createdAt,
+      approvedAt: driver.approvedAt,
+      vehicles: driver.vehicles,
+    };
   }
 
   async approveDriver(id: string) {

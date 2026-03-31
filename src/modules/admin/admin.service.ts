@@ -288,8 +288,6 @@ export class AdminService {
 
     return statusMap[status] || status;
   }
-}
-
 
   async bookRideForCustomer(bookingData: any) {
     const {
@@ -434,3 +432,4 @@ export class AdminService {
       },
     };
   }
+}

@@ -39,12 +39,13 @@ export class WalletService {
       });
 
       // Create transaction record
-      await tx.walletTransaction.create({
+      await tx.transaction.create({
         data: {
           walletId: wallet.id,
-          type: 'CREDIT',
+          userId,
+          type: 'WALLET_TOPUP',
           amount,
-          balanceAfter: wallet.balance,
+          status: 'COMPLETED',
           description,
           referenceId,
         },
@@ -75,7 +76,7 @@ export class WalletService {
       }
 
       // Check sufficient balance
-      if (currentWallet.balance < amount) {
+      if (Number(currentWallet.balance) < amount) {
         throw new BadRequestException('Insufficient balance');
       }
 
@@ -90,12 +91,13 @@ export class WalletService {
       });
 
       // Create transaction record
-      await tx.walletTransaction.create({
+      await tx.transaction.create({
         data: {
           walletId: wallet.id,
-          type: 'DEBIT',
+          userId,
+          type: 'WALLET_WITHDRAWAL',
           amount,
-          balanceAfter: wallet.balance,
+          status: 'COMPLETED',
           description,
           referenceId,
         },
@@ -121,7 +123,7 @@ export class WalletService {
       }
 
       // Check sufficient balance
-      if (currentWallet.balance < amount) {
+      if (Number(currentWallet.balance) < amount) {
         throw new BadRequestException('Insufficient balance');
       }
 
@@ -132,19 +134,22 @@ export class WalletService {
           balance: {
             decrement: amount,
           },
-          heldBalance: {
+          holdBalance: {
             increment: amount,
           },
         },
       });
 
-      // Create hold record
-      await tx.walletHold.create({
+      // Create transaction record for the hold
+      await tx.transaction.create({
         data: {
           walletId: wallet.id,
+          userId,
+          type: 'RIDE_PAYMENT',
           amount,
+          status: 'PENDING',
+          description: 'Payment hold',
           referenceId,
-          status: 'ACTIVE',
         },
       });
 
@@ -154,48 +159,47 @@ export class WalletService {
 
   async releaseHold(userId: string, referenceId: string, capture: boolean = false) {
     return this.prisma.$transaction(async (tx) => {
-      // Find the hold
+      // Find the wallet
       const wallet = await tx.wallet.findUnique({
         where: { userId },
-        include: {
-          holds: {
-            where: {
-              referenceId,
-              status: 'ACTIVE',
-            },
-          },
-        },
       });
 
       if (!wallet) {
         throw new NotFoundException('Wallet not found');
       }
 
-      const hold = wallet.holds[0];
-      if (!hold) {
+      // Find the pending transaction
+      const transaction = await tx.transaction.findFirst({
+        where: {
+          walletId: wallet.id,
+          referenceId,
+          status: 'PENDING',
+        },
+      });
+
+      if (!transaction) {
         throw new NotFoundException('Hold not found');
       }
+
+      const amount = Number(transaction.amount);
 
       if (capture) {
         // Capture the hold (deduct from held balance)
         await tx.wallet.update({
           where: { userId },
           data: {
-            heldBalance: {
-              decrement: hold.amount,
+            holdBalance: {
+              decrement: amount,
             },
           },
         });
 
-        // Create transaction record
-        await tx.walletTransaction.create({
+        // Update transaction status
+        await tx.transaction.update({
+          where: { id: transaction.id },
           data: {
-            walletId: wallet.id,
-            type: 'DEBIT',
-            amount: hold.amount,
-            balanceAfter: wallet.balance,
-            description: 'Payment captured from hold',
-            referenceId,
+            status: 'COMPLETED',
+            processedAt: new Date(),
           },
         });
       } else {
@@ -204,22 +208,23 @@ export class WalletService {
           where: { userId },
           data: {
             balance: {
-              increment: hold.amount,
+              increment: amount,
             },
-            heldBalance: {
-              decrement: hold.amount,
+            holdBalance: {
+              decrement: amount,
             },
           },
         });
-      }
 
-      // Update hold status
-      await tx.walletHold.update({
-        where: { id: hold.id },
-        data: {
-          status: capture ? 'CAPTURED' : 'RELEASED',
-        },
-      });
+        // Update transaction status
+        await tx.transaction.update({
+          where: { id: transaction.id },
+          data: {
+            status: 'CANCELLED',
+            processedAt: new Date(),
+          },
+        });
+      }
 
       return tx.wallet.findUnique({ where: { userId } });
     });
@@ -234,7 +239,7 @@ export class WalletService {
       throw new NotFoundException('Wallet not found');
     }
 
-    return this.prisma.walletTransaction.findMany({
+    return this.prisma.transaction.findMany({
       where: { walletId: wallet.id },
       orderBy: { createdAt: 'desc' },
       take: limit,
@@ -245,7 +250,7 @@ export class WalletService {
     const wallet = await this.getWallet(userId);
     return {
       balance: wallet.balance,
-      heldBalance: wallet.heldBalance,
+      heldBalance: wallet.holdBalance,
       availableBalance: wallet.balance,
       currency: wallet.currency,
     };

@@ -65,7 +65,7 @@ export class PaymentGatewayService {
         {
           amount,
           currency: 'MRU',
-          phoneNumber: user.phoneNumber,
+          phoneNumber: user.phone,
           reference: referenceId,
           callbackUrl: `${this.configService.get('APP_URL')}/webhooks/bankily`,
         },
@@ -121,7 +121,7 @@ export class PaymentGatewayService {
         {
           amount,
           currency: 'MRU',
-          customerPhone: user.phoneNumber,
+          customerPhone: user.phone,
           merchantReference: referenceId,
           webhookUrl: `${this.configService.get('APP_URL')}/webhooks/sedad`,
         },
@@ -177,7 +177,7 @@ export class PaymentGatewayService {
         {
           amount: amount * 100, // Convert to cents
           currency: 'MRU',
-          phone: user.phoneNumber,
+          phone: user.phone,
           orderId: referenceId,
           notifyUrl: `${this.configService.get('APP_URL')}/webhooks/masrvi`,
         },

@@ -40,18 +40,38 @@ export class AuthController {
     // Verify OTP
     await this.otpService.verifyOTP(verifyOtpDto.phoneNumber, verifyOtpDto.otp);
 
-    // Find or create user
+    // Find or create user with relations
     let user = await this.prisma.user.findUnique({
-      where: { phoneNumber: verifyOtpDto.phoneNumber },
+      where: { phone: verifyOtpDto.phoneNumber },
+      include: {
+        admin: true,
+        driver: true,
+        employee: true,
+        consumer: true,
+      },
     });
 
     if (!user) {
-      // Create new user with CONSUMER role by default
+      // Create new user
       user = await this.prisma.user.create({
         data: {
-          phoneNumber: verifyOtpDto.phoneNumber,
-          role: 'CONSUMER',
-          isPhoneVerified: true,
+          phone: verifyOtpDto.phoneNumber,
+          phoneVerified: true,
+          firstName: '',
+          lastName: '',
+        },
+        include: {
+          admin: true,
+          driver: true,
+          employee: true,
+          consumer: true,
+        },
+      });
+
+      // Create consumer profile
+      await this.prisma.consumer.create({
+        data: {
+          userId: user.id,
         },
       });
 
@@ -59,16 +79,23 @@ export class AuthController {
       await this.prisma.wallet.create({
         data: {
           userId: user.id,
+          type: 'CONSUMER',
           balance: 0,
           currency: 'MRU',
         },
       });
     } else {
       // Update phone verification status
-      if (!user.isPhoneVerified) {
+      if (!user.phoneVerified) {
         user = await this.prisma.user.update({
           where: { id: user.id },
-          data: { isPhoneVerified: true },
+          data: { phoneVerified: true },
+          include: {
+            admin: true,
+            driver: true,
+            employee: true,
+            consumer: true,
+          },
         });
       }
     }
@@ -81,10 +108,16 @@ export class AuthController {
       });
     }
 
+    // Determine user role based on relations
+    let role = 'CONSUMER';
+    if (user.admin) role = 'ADMIN';
+    else if (user.driver) role = 'DRIVER';
+    else if (user.employee) role = 'EMPLOYEE';
+
     // Generate JWT tokens
     const tokens = await this.jwtAuthService.generateTokens(
       user.id,
-      user.role,
+      role,
       verifyOtpDto.deviceInfo,
     );
 
@@ -92,8 +125,8 @@ export class AuthController {
       ...tokens,
       user: {
         id: user.id,
-        phoneNumber: user.phoneNumber,
-        role: user.role,
+        phoneNumber: user.phone,
+        role,
         firstName: user.firstName,
         lastName: user.lastName,
       },
@@ -112,7 +145,7 @@ export class AuthController {
   @Post('logout')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
-  async logout(@Request() req) {
+  async logout(@Request() req: any) {
     await this.jwtAuthService.logout(req.user.sessionId);
     return { message: 'Logged out successfully' };
   }
@@ -120,7 +153,7 @@ export class AuthController {
   @Post('logout-all')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
-  async logoutAll(@Request() req) {
+  async logoutAll(@Request() req: any) {
     await this.jwtAuthService.logoutAllSessions(req.user.id);
     return { message: 'Logged out from all devices successfully' };
   }

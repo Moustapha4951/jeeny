@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
@@ -23,7 +23,7 @@ export class UsersService {
 
   async findByPhoneNumber(phoneNumber: string) {
     return this.prisma.user.findUnique({
-      where: { phoneNumber },
+      where: { phone: phoneNumber },
       include: {
         wallet: true,
       },
@@ -66,8 +66,11 @@ export class UsersService {
   }) {
     return this.prisma.savedPlace.create({
       data: {
-        ...data,
         userId,
+        name: data.label,
+        address: data.address,
+        lat: data.latitude,
+        lng: data.longitude,
       },
     });
   }
@@ -88,7 +91,12 @@ export class UsersService {
 
     return this.prisma.savedPlace.update({
       where: { id: placeId },
-      data,
+      data: {
+        name: data.label,
+        address: data.address,
+        lat: data.latitude,
+        lng: data.longitude,
+      },
     });
   }
 
@@ -109,10 +117,13 @@ export class UsersService {
   }
 
   async uploadDocument(userId: string, documentType: string, documentUrl: string) {
-    return this.prisma.user.update({
-      where: { id: userId },
+    // Create a document record instead of updating user
+    return this.prisma.document.create({
       data: {
-        [`${documentType}Url`]: documentUrl,
+        userId,
+        type: documentType as any,
+        url: documentUrl,
+        status: 'PENDING',
       },
     });
   }

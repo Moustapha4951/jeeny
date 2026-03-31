@@ -65,7 +65,7 @@ export class AdminController {
   }
 
   @Get('users')
-  async getAllUsers(@Query('role') role?: string) {
-    return this.adminsService.getAllUsers(role);
+  async getAllUsers() {
+    return this.adminsService.getAllUsers();
   }
 }

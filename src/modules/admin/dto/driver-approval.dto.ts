@@ -1,27 +1,27 @@
-import { IsString, IsNotEmpty, IsOptional } from 'class-validator';
+import { IsString, IsNotEmpty } from 'class-validator';
 
 export class ApproveDriverDto {
   @IsString()
   @IsNotEmpty()
-  driverId: string;
+  driverId!: string;
 }
 
 export class RejectDriverDto {
   @IsString()
   @IsNotEmpty()
-  driverId: string;
+  driverId!: string;
 
   @IsString()
   @IsNotEmpty()
-  reason: string;
+  reason!: string;
 }
 
 export class SuspendDriverDto {
   @IsString()
   @IsNotEmpty()
-  driverId: string;
+  driverId!: string;
 
   @IsString()
   @IsNotEmpty()
-  reason: string;
+  reason!: string;
 }

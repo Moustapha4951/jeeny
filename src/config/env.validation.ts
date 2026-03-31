@@ -14,31 +14,31 @@ class EnvironmentVariables {
 
   @IsString()
   @IsNotEmpty()
-  DATABASE_URL: string;
+  DATABASE_URL!: string;
 
   @IsString()
   @IsNotEmpty()
-  REDIS_URL: string;
+  REDIS_URL!: string;
 
   @IsString()
   @IsNotEmpty()
-  FIREBASE_PROJECT_ID: string;
+  FIREBASE_PROJECT_ID!: string;
 
   @IsString()
   @IsNotEmpty()
-  FIREBASE_CLIENT_EMAIL: string;
+  FIREBASE_CLIENT_EMAIL!: string;
 
   @IsString()
   @IsNotEmpty()
-  FIREBASE_PRIVATE_KEY: string;
+  FIREBASE_PRIVATE_KEY!: string;
 
   @IsString()
   @IsNotEmpty()
-  GOOGLE_MAPS_API_KEY: string;
+  GOOGLE_MAPS_API_KEY!: string;
 
   @IsString()
   @IsNotEmpty()
-  JWT_SECRET: string;
+  JWT_SECRET!: string;
 
   @IsString()
   @IsOptional()
@@ -46,35 +46,35 @@ class EnvironmentVariables {
 
   @IsString()
   @IsOptional()
-  AGORA_APP_ID: string;
+  AGORA_APP_ID!: string;
 
   @IsString()
   @IsOptional()
-  AGORA_APP_CERTIFICATE: string;
+  AGORA_APP_CERTIFICATE!: string;
 
   @IsString()
   @IsOptional()
-  BANKILY_API_KEY: string;
+  BANKILY_API_KEY!: string;
 
   @IsString()
   @IsOptional()
-  BANKILY_API_URL: string;
+  BANKILY_API_URL!: string;
 
   @IsString()
   @IsOptional()
-  SEDAD_API_KEY: string;
+  SEDAD_API_KEY!: string;
 
   @IsString()
   @IsOptional()
-  SEDAD_API_URL: string;
+  SEDAD_API_URL!: string;
 
   @IsString()
   @IsOptional()
-  MASRVI_API_KEY: string;
+  MASRVI_API_KEY!: string;
 
   @IsString()
   @IsOptional()
-  MASRVI_API_URL: string;
+  MASRVI_API_URL!: string;
 }
 
 export function validate(config: Record<string, unknown>) {

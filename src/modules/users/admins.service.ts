@@ -6,8 +6,9 @@ export class AdminsService {
   constructor(private prisma: PrismaService) {}
 
   async approveDriver(driverId: string, approvedBy: string) {
-    const driver = await this.prisma.user.findFirst({
-      where: { id: driverId, role: 'DRIVER' },
+    const driver = await this.prisma.driver.findUnique({
+      where: { id: driverId },
+      include: { user: true },
     });
 
     if (!driver) {
@@ -19,13 +20,14 @@ export class AdminsService {
     }
 
     // Update driver status
-    const updatedDriver = await this.prisma.user.update({
+    const updatedDriver = await this.prisma.driver.update({
       where: { id: driverId },
       data: {
         status: 'APPROVED',
         approvedAt: new Date(),
-        approvedBy,
+        approvedById: approvedBy,
       },
+      include: { user: true },
     });
 
     // Log the approval
@@ -33,9 +35,9 @@ export class AdminsService {
       data: {
         userId: approvedBy,
         action: 'DRIVER_APPROVED',
-        entityType: 'USER',
-        entityId: driverId,
-        details: { driverId, status: 'APPROVED' },
+        resource: 'DRIVER',
+        resourceId: driverId,
+        newValue: { status: 'APPROVED' },
       },
     });
 
@@ -43,8 +45,8 @@ export class AdminsService {
   }
 
   async rejectDriver(driverId: string, rejectedBy: string, reason: string) {
-    const driver = await this.prisma.user.findFirst({
-      where: { id: driverId, role: 'DRIVER' },
+    const driver = await this.prisma.driver.findUnique({
+      where: { id: driverId },
     });
 
     if (!driver) {
@@ -52,12 +54,12 @@ export class AdminsService {
     }
 
     // Update driver status
-    const updatedDriver = await this.prisma.user.update({
+    const updatedDriver = await this.prisma.driver.update({
       where: { id: driverId },
       data: {
         status: 'REJECTED',
-        rejectionReason: reason,
       },
+      include: { user: true },
     });
 
     // Log the rejection
@@ -65,9 +67,9 @@ export class AdminsService {
       data: {
         userId: rejectedBy,
         action: 'DRIVER_REJECTED',
-        entityType: 'USER',
-        entityId: driverId,
-        details: { driverId, status: 'REJECTED', reason },
+        resource: 'DRIVER',
+        resourceId: driverId,
+        newValue: { status: 'REJECTED', reason },
       },
     });
 
@@ -75,8 +77,8 @@ export class AdminsService {
   }
 
   async suspendDriver(driverId: string, suspendedBy: string, reason: string) {
-    const driver = await this.prisma.user.findFirst({
-      where: { id: driverId, role: 'DRIVER' },
+    const driver = await this.prisma.driver.findUnique({
+      where: { id: driverId },
     });
 
     if (!driver) {
@@ -84,12 +86,13 @@ export class AdminsService {
     }
 
     // Update driver status
-    const updatedDriver = await this.prisma.user.update({
+    const updatedDriver = await this.prisma.driver.update({
       where: { id: driverId },
       data: {
         status: 'SUSPENDED',
         isOnline: false,
       },
+      include: { user: true },
     });
 
     // Log the suspension
@@ -97,9 +100,9 @@ export class AdminsService {
       data: {
         userId: suspendedBy,
         action: 'DRIVER_SUSPENDED',
-        entityType: 'USER',
-        entityId: driverId,
-        details: { driverId, status: 'SUSPENDED', reason },
+        resource: 'DRIVER',
+        resourceId: driverId,
+        newValue: { status: 'SUSPENDED', reason },
       },
     });
 
@@ -107,45 +110,43 @@ export class AdminsService {
   }
 
   async getPendingDrivers() {
-    return this.prisma.user.findMany({
+    return this.prisma.driver.findMany({
       where: {
-        role: 'DRIVER',
         status: 'PENDING',
       },
       include: {
-        driverProfile: true,
-        vehicle: true,
+        user: true,
+        vehicles: true,
       },
       orderBy: { createdAt: 'desc' },
     });
   }
 
   async getAllDrivers(status?: string) {
-    const where: any = { role: 'DRIVER' };
+    const where: any = {};
     
     if (status) {
       where.status = status;
     }
 
-    return this.prisma.user.findMany({
+    return this.prisma.driver.findMany({
       where,
       include: {
-        driverProfile: true,
-        vehicle: true,
+        user: true,
+        vehicles: true,
       },
       orderBy: { createdAt: 'desc' },
     });
   }
 
-  async getAllUsers(role?: string) {
-    const where: any = {};
-    
-    if (role) {
-      where.role = role;
-    }
-
+  async getAllUsers() {
     return this.prisma.user.findMany({
-      where,
+      include: {
+        driver: true,
+        consumer: true,
+        admin: true,
+        employee: true,
+      },
       orderBy: { createdAt: 'desc' },
     });
   }

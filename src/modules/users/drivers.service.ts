@@ -12,11 +12,11 @@ export class DriversService {
   ) {}
 
   async findById(id: string) {
-    const driver = await this.prisma.user.findFirst({
-      where: { id, role: 'DRIVER' },
+    const driver = await this.prisma.driver.findUnique({
+      where: { id },
       include: {
-        vehicle: true,
-        driverProfile: true,
+        user: true,
+        vehicles: true,
       },
     });
 
@@ -36,29 +36,29 @@ export class DriversService {
     vehicleRegistrationUrl?: string;
     insuranceUrl?: string;
   }) {
-    // Check if driver profile exists
-    const profile = await this.prisma.driverProfile.findUnique({
+    // Update driver record directly
+    const driver = await this.prisma.driver.findUnique({
       where: { userId },
     });
 
-    if (profile) {
-      return this.prisma.driverProfile.update({
-        where: { userId },
-        data,
-      });
-    } else {
-      return this.prisma.driverProfile.create({
-        data: {
-          userId,
-          ...data,
-        },
-      });
+    if (!driver) {
+      throw new NotFoundException('Driver not found');
     }
+
+    return this.prisma.driver.update({
+      where: { userId },
+      data: {
+        licenseNumber: data.licenseNumber,
+        licenseImage: data.licenseUrl,
+        nationalIdImage: data.idCardUrl,
+        profilePhoto: data.profilePictureUrl,
+      },
+    });
   }
 
   async updateOnlineStatus(userId: string, isOnline: boolean) {
-    const driver = await this.prisma.user.findFirst({
-      where: { id: userId, role: 'DRIVER' },
+    const driver = await this.prisma.driver.findUnique({
+      where: { userId },
     });
 
     if (!driver) {
@@ -66,22 +66,22 @@ export class DriversService {
     }
 
     // Update database
-    await this.prisma.user.update({
-      where: { id: userId },
+    await this.prisma.driver.update({
+      where: { userId },
       data: { isOnline },
     });
 
     // If going offline, remove from Redis geospatial index
     if (!isOnline) {
-      await this.redis.getClient().zrem(this.DRIVER_LOCATION_KEY, userId);
+      await this.redis.getClient().zrem(this.DRIVER_LOCATION_KEY, driver.id);
     }
 
     return { isOnline };
   }
 
   async updateLocation(userId: string, latitude: number, longitude: number) {
-    const driver = await this.prisma.user.findFirst({
-      where: { id: userId, role: 'DRIVER' },
+    const driver = await this.prisma.driver.findUnique({
+      where: { userId },
     });
 
     if (!driver) {
@@ -93,7 +93,7 @@ export class DriversService {
     }
 
     // Check if location has changed significantly (> 10 meters)
-    const lastLocation = await this.redis.geoPos(this.DRIVER_LOCATION_KEY, userId);
+    const lastLocation = await this.redis.geoPos(this.DRIVER_LOCATION_KEY, driver.id);
     
     if (lastLocation) {
       const distance = this.calculateDistance(
@@ -110,14 +110,24 @@ export class DriversService {
     }
 
     // Update Redis geospatial index
-    await this.redis.geoAdd(this.DRIVER_LOCATION_KEY, longitude, latitude, userId);
+    await this.redis.geoAdd(this.DRIVER_LOCATION_KEY, longitude, latitude, driver.id);
 
-    // Log location history in database
-    await this.prisma.locationHistory.create({
+    // Update driver's current location in database
+    await this.prisma.driver.update({
+      where: { id: driver.id },
       data: {
-        userId,
-        latitude,
-        longitude,
+        currentLat: latitude,
+        currentLng: longitude,
+        lastLocationAt: new Date(),
+      },
+    });
+
+    // Log location history
+    await this.prisma.driverLocation.create({
+      data: {
+        driverId: driver.id,
+        lat: latitude,
+        lng: longitude,
       },
     });
 
@@ -138,16 +148,15 @@ export class DriversService {
     }
 
     // Get driver details from database
-    const drivers = await this.prisma.user.findMany({
+    const drivers = await this.prisma.driver.findMany({
       where: {
         id: { in: driverIds },
-        role: 'DRIVER',
         isOnline: true,
         status: 'APPROVED',
       },
       include: {
-        vehicle: true,
-        driverProfile: true,
+        user: true,
+        vehicles: true,
       },
     });
 
@@ -168,31 +177,30 @@ export class DriversService {
   }
 
   async getDriverStats(userId: string) {
-    const [totalRides, completedRides, cancelledRides, totalEarnings] = await Promise.all([
+    const driver = await this.findById(userId);
+
+    const [totalRides, completedRides, cancelledRides] = await Promise.all([
       this.prisma.ride.count({
-        where: { driverId: userId },
+        where: { driverId: driver.id },
       }),
       this.prisma.ride.count({
-        where: { driverId: userId, status: 'COMPLETED' },
+        where: { driverId: driver.id, status: 'COMPLETED' },
       }),
       this.prisma.ride.count({
-        where: { driverId: userId, status: 'CANCELLED' },
-      }),
-      this.prisma.ride.aggregate({
-        where: { driverId: userId, status: 'COMPLETED' },
-        _sum: { driverEarnings: true },
+        where: { 
+          driverId: driver.id, 
+          status: { in: ['CANCELLED_BY_RIDER', 'CANCELLED_BY_DRIVER'] },
+        },
       }),
     ]);
-
-    const driver = await this.findById(userId);
 
     return {
       totalRides,
       completedRides,
       cancelledRides,
-      totalEarnings: totalEarnings._sum.driverEarnings || 0,
+      totalEarnings: driver.totalEarnings,
       rating: driver.rating,
-      acceptanceRate: driver.acceptanceRate,
+      acceptanceRate: 0, // Calculate from ride offers if needed
     };
   }
 

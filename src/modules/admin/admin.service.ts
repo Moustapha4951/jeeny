@@ -196,20 +196,25 @@ export class AdminService {
       take: 50,
     });
 
-    return rides.map((ride) => ({
-      id: ride.id,
-      rideNumber: ride.rideNumber,
-      passenger: `${ride.consumer.user.firstName} ${ride.consumer.user.lastName}`,
-      driver: ride.driver
-        ? `${ride.driver.user.firstName} ${ride.driver.user.lastName}`
-        : 'غير محدد',
-      status: this.translateStatus(ride.status),
-      fare: Number(ride.finalFare || ride.estimatedFare),
-      pickupAddress: ride.pickupAddress,
-      dropoffAddress: ride.dropoffAddress,
-      createdAt: ride.createdAt,
-      completedAt: ride.completedAt,
-    }));
+    return rides.map((ride) => {
+      const consumerName = `${ride.consumer.user.firstName || ''} ${ride.consumer.user.lastName || ''}`.trim() || 'راكب';
+      const driverName = ride.driver
+        ? `${ride.driver.user.firstName || ''} ${ride.driver.user.lastName || ''}`.trim() || 'سائق'
+        : 'غير محدد';
+      
+      return {
+        id: ride.id,
+        rideNumber: ride.rideNumber,
+        passenger: consumerName,
+        driver: driverName,
+        status: this.translateStatus(ride.status),
+        fare: Number(ride.finalFare || ride.estimatedFare).toFixed(0),
+        pickupAddress: ride.pickupAddress,
+        dropoffAddress: ride.dropoffAddress,
+        createdAt: ride.createdAt,
+        completedAt: ride.completedAt,
+      };
+    });
   }
 
   async getRideById(id: string) {

@@ -302,7 +302,7 @@ export class AdminService {
       vehicleTypeId,
     } = bookingData;
 
-    // Find or create consumer by phone
+    // Find or create consumer by phone number
     let consumer = await this.prisma.consumer.findFirst({
       where: {
         user: {

@@ -395,6 +395,34 @@ export class AdminService {
     return `JNY-${date}-${shortId}`;
   }
 
+  async checkCustomerByPhone(phone: string) {
+    const consumer = await this.prisma.consumer.findFirst({
+      where: {
+        user: {
+          phone: phone,
+        },
+      },
+      include: {
+        user: {
+          select: {
+            firstName: true,
+            lastName: true,
+          },
+        },
+      },
+    });
+
+    if (consumer) {
+      return {
+        exists: true,
+        id: consumer.id,
+        name: `${consumer.user.firstName || ''} ${consumer.user.lastName || ''}`.trim(),
+      };
+    }
+
+    return { exists: false };
+  }
+
   async bookRideForCustomer(bookingData: any) {
     const {
       customerPhone,

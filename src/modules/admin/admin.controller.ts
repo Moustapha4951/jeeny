@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Param, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Param, Body, UseGuards, Query } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -48,6 +48,12 @@ export class AdminController {
   @Post('drivers/:id/suspend')
   async suspendDriver(@Param('id') id: string, @Body('reason') reason: string) {
     return this.adminService.suspendDriver(id, reason);
+  }
+
+  // Check if customer exists by phone
+  @Get('customer/check')
+  async checkCustomer(@Query('phone') phone: string) {
+    return this.adminService.checkCustomerByPhone(phone);
   }
 
   // Public endpoint for testing

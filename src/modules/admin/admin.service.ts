@@ -819,16 +819,21 @@ export class AdminService {
 
   // ===== Zones Management =====
   async getZones() {
-    const zones = await this.prisma.zone.findMany({
-      include: {
-        city: true,
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-    });
+    try {
+      const zones = await this.prisma.zone.findMany({
+        include: {
+          city: true,
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+      });
 
-    return zones;
+      return zones;
+    } catch (error) {
+      console.error('Error fetching zones:', error);
+      throw new Error('فشل في تحميل المناطق');
+    }
   }
 
   async getZone(id: string) {

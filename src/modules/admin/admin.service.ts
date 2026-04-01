@@ -466,9 +466,11 @@ export class AdminService {
     // If consumer doesn't exist, create one
     if (!consumer) {
       // Split customer name into first and last name
-      const nameParts = (customerName || 'عميل جديد').trim().split(' ');
+      const fullName = (customerName || 'عميل').trim();
+      const nameParts = fullName.split(' ');
       const firstName = nameParts[0] || 'عميل';
-      const lastName = nameParts.slice(1).join(' ') || 'جديد';
+      // Only use remaining parts as lastName if they exist, otherwise use empty string
+      const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
       
       console.log('Creating new user with:', { firstName, lastName, phone: customerPhone });
       
@@ -671,6 +673,68 @@ export class AdminService {
     return {
       success: true,
       message: 'تم إلغاء الرحلة بنجاح',
+    };
+  }
+
+  async createVehicleType(data: any) {
+    const vehicleType = await this.prisma.vehicleType.create({
+      data: {
+        name: data.name,
+        nameAr: data.nameAr,
+        nameFr: data.nameFr || data.name,
+        description: data.description,
+        basePrice: data.basePrice,
+        pricePerKm: data.pricePerKm,
+        pricePerMin: data.pricePerMin,
+        minFare: data.minFare,
+        capacity: data.capacity || 4,
+        icon: data.icon || 'car',
+        isActive: data.isActive !== undefined ? data.isActive : true,
+        supportsIntercity: data.supportsIntercity || false,
+      },
+    });
+
+    return {
+      success: true,
+      message: 'تم إضافة نوع المركبة بنجاح',
+      vehicleType,
+    };
+  }
+
+  async updateVehicleType(id: string, data: any) {
+    const vehicleType = await this.prisma.vehicleType.findUnique({
+      where: { id },
+    });
+
+    if (!vehicleType) {
+      return {
+        success: false,
+        message: 'نوع المركبة غير موجود',
+      };
+    }
+
+    const updated = await this.prisma.vehicleType.update({
+      where: { id },
+      data: {
+        name: data.name !== undefined ? data.name : vehicleType.name,
+        nameAr: data.nameAr !== undefined ? data.nameAr : vehicleType.nameAr,
+        nameFr: data.nameFr !== undefined ? data.nameFr : vehicleType.nameFr,
+        description: data.description !== undefined ? data.description : vehicleType.description,
+        basePrice: data.basePrice !== undefined ? data.basePrice : vehicleType.basePrice,
+        pricePerKm: data.pricePerKm !== undefined ? data.pricePerKm : vehicleType.pricePerKm,
+        pricePerMin: data.pricePerMin !== undefined ? data.pricePerMin : vehicleType.pricePerMin,
+        minFare: data.minFare !== undefined ? data.minFare : vehicleType.minFare,
+        capacity: data.capacity !== undefined ? data.capacity : vehicleType.capacity,
+        icon: data.icon !== undefined ? data.icon : vehicleType.icon,
+        isActive: data.isActive !== undefined ? data.isActive : vehicleType.isActive,
+        supportsIntercity: data.supportsIntercity !== undefined ? data.supportsIntercity : vehicleType.supportsIntercity,
+      },
+    });
+
+    return {
+      success: true,
+      message: 'تم تحديث نوع المركبة بنجاح',
+      vehicleType: updated,
     };
   }
 }

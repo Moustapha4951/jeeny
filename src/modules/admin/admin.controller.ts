@@ -85,4 +85,16 @@ export class AdminController {
   async cancelRide(@Param('id') id: string, @Body() body: { reason?: string }) {
     return this.adminService.cancelRide(id, body.reason);
   }
+
+  // Create vehicle type endpoint (public for testing)
+  @Post('vehicle-types')
+  async createVehicleType(@Body() data: any) {
+    return this.adminService.createVehicleType(data);
+  }
+
+  // Update vehicle type endpoint (public for testing)
+  @Put('vehicle-types/:id')
+  async updateVehicleType(@Param('id') id: string, @Body() data: any) {
+    return this.adminService.updateVehicleType(id, data);
+  }
 }

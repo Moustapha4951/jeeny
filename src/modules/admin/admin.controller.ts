@@ -97,4 +97,16 @@ export class AdminController {
   async updateVehicleType(@Param('id') id: string, @Body() data: any) {
     return this.adminService.updateVehicleType(id, data);
   }
+
+  // Get system settings endpoint (public for testing)
+  @Get('settings')
+  async getSystemSettings() {
+    return this.adminService.getSystemSettings();
+  }
+
+  // Update system setting endpoint (public for testing)
+  @Put('settings/:key')
+  async updateSystemSetting(@Param('key') key: string, @Body() data: any) {
+    return this.adminService.updateSystemSetting(key, data);
+  }
 }

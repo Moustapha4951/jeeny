@@ -747,4 +747,73 @@ export class AdminService {
       vehicleType: updated,
     };
   }
+
+  async getSystemSettings() {
+    const settings = await this.prisma.systemSetting.findMany({
+      orderBy: {
+        category: 'asc',
+      },
+    });
+
+    // Group settings by category
+    const grouped = settings.reduce((acc, setting) => {
+      if (!acc[setting.category]) {
+        acc[setting.category] = [];
+      }
+      acc[setting.category].push({
+        key: setting.key,
+        value: setting.value,
+        valueType: setting.valueType,
+        descriptionAr: setting.descriptionAr,
+        descriptionEn: setting.descriptionEn,
+        updatedAt: setting.updatedAt,
+      });
+      return acc;
+    }, {} as Record<string, any[]>);
+
+    return grouped;
+  }
+
+  async updateSystemSetting(key: string, data: any) {
+    const setting = await this.prisma.systemSetting.findUnique({
+      where: { key },
+    });
+
+    if (!setting) {
+      // Create new setting if it doesn't exist
+      const newSetting = await this.prisma.systemSetting.create({
+        data: {
+          key,
+          value: data.value,
+          valueType: data.valueType || 'STRING',
+          category: data.category || 'GENERAL',
+          descriptionAr: data.descriptionAr,
+          descriptionEn: data.descriptionEn,
+          isPublic: data.isPublic || false,
+        },
+      });
+
+      return {
+        success: true,
+        message: 'تم إنشاء الإعداد بنجاح',
+        setting: newSetting,
+      };
+    }
+
+    const updated = await this.prisma.systemSetting.update({
+      where: { key },
+      data: {
+        value: data.value !== undefined ? data.value : setting.value,
+        valueType: data.valueType !== undefined ? data.valueType : setting.valueType,
+        descriptionAr: data.descriptionAr !== undefined ? data.descriptionAr : setting.descriptionAr,
+        descriptionEn: data.descriptionEn !== undefined ? data.descriptionEn : setting.descriptionEn,
+      },
+    });
+
+    return {
+      success: true,
+      message: 'تم تحديث الإعداد بنجاح',
+      setting: updated,
+    };
+  }
 }

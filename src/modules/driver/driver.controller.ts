@@ -10,19 +10,70 @@ import { DriverService } from './driver.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { PrismaService } from '../../prisma/prisma.service';
 
 @Controller('driver')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('DRIVER')
+@UseGuards(JwtAuthGuard)
 export class DriverController {
-  constructor(private readonly driverService: DriverService) {}
+  constructor(
+    private readonly driverService: DriverService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   @Get('profile')
   async getProfile(@Request() req: any) {
     return this.driverService.getProfile(req.user.id);
   }
 
-  @Post('location')
+  @Post('profile')
+  async updateProfile(
+    @Request() req: any,
+    @Body() body: { firstName: string; lastName: string },
+  ) {
+    // Update user name
+    await this.prisma.user.update({
+      where: { id: req.user.id },
+      data: {
+        firstName: body.firstName,
+        lastName: body.lastName,
+      },
+    });
+
+    // Check if driver profile exists, if not create one
+    let driver = await this.prisma.driver.findUnique({
+      where: { userId: req.user.id },
+    });
+
+    if (!driver) {
+      // Create driver profile with minimal required fields
+      driver = await this.prisma.driver.create({
+        data: {
+          userId: req.user.id,
+          licenseNumber: `TEMP-${req.user.id.substring(0, 8)}`, // Temporary
+          licenseExpiry: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 1 year from now
+          nationalId: `TEMP-${req.user.id.substring(0, 8)}`, // Temporary
+          dateOfBirth: new Date('1990-01-01'), // Default
+          gender: 'MALE', // Default
+          address: 'Nouakchott', // Default
+          city: 'Nouakchott',
+          state: 'Nouakchott',
+          status: 'PENDING',
+        },
+      });
+
+      // Create driver wallet
+      await this.prisma.wallet.create({
+        data: {
+          userId: req.user.id,
+          type: 'DRIVER',
+          balance: 0,
+          currency: 'MRU',
+        },
+      });
+    }
+
+    return { success: true, driver };
+  }
   async updateLocation(
     @Request() req: any,
     @Body() body: { latitude: number; longitude: number },

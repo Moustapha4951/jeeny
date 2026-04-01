@@ -333,6 +333,7 @@ enum ComplaintAction {
 
 enum ZoneType {
   CITY
+  NEIGHBORHOOD
   AIRPORT
   RESTRICTED
   SURGE

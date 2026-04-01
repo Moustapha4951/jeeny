@@ -96,4 +96,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   async flushdb(): Promise<'OK'> {
     return this.client.flushdb();
   }
+
+  async zRem(key: string, member: string): Promise<number> {
+    return this.client.zrem(key, member);
+  }
 }

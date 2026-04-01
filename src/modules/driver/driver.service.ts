@@ -18,16 +18,13 @@ export class DriverService {
             vehicles: true,
           },
         },
-        wallets: true,
+        wallet: true,
       },
     });
 
     if (!user || !user.driver) {
       throw new NotFoundException('Driver profile not found');
     }
-
-    // Get the driver's wallet
-    const wallet = user.wallets.find(w => w.type === 'DRIVER');
 
     return {
       id: user.id,
@@ -36,7 +33,7 @@ export class DriverService {
       phone: user.phone,
       avatar: user.avatar,
       driver: user.driver,
-      wallet: wallet,
+      wallet: user.wallet,
       isOnline: user.driver.isOnline,
     };
   }
@@ -176,7 +173,6 @@ export class DriverService {
       data: {
         status: 'DRIVER_ASSIGNED',
         driverId: driver.id,
-        driverAssignedAt: new Date(),
       },
     });
 

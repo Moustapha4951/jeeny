@@ -426,6 +426,7 @@ export class AdminService {
   async bookRideForCustomer(bookingData: any) {
     const {
       customerPhone,
+      customerName,
       pickupAddress,
       dropoffAddress,
       pickupLat,
@@ -450,12 +451,17 @@ export class AdminService {
 
     // If consumer doesn't exist, create one
     if (!consumer) {
+      // Split customer name into first and last name
+      const nameParts = (customerName || 'عميل جديد').trim().split(' ');
+      const firstName = nameParts[0] || 'عميل';
+      const lastName = nameParts.slice(1).join(' ') || 'جديد';
+      
       const user = await this.prisma.user.create({
         data: {
           phone: customerPhone,
           phoneVerified: true,
-          firstName: 'عميل',
-          lastName: 'جديد',
+          firstName: firstName,
+          lastName: lastName,
         },
       });
 

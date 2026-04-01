@@ -258,19 +258,118 @@ export class AdminService {
       include: {
         consumer: {
           include: {
-            user: true,
+            user: {
+              select: {
+                id: true,
+                phone: true,
+                firstName: true,
+                lastName: true,
+                avatar: true,
+              },
+            },
           },
         },
         driver: {
           include: {
-            user: true,
+            user: {
+              select: {
+                id: true,
+                phone: true,
+                firstName: true,
+                lastName: true,
+                avatar: true,
+              },
+            },
+            vehicles: true,
           },
         },
         vehicleType: true,
+        vehicle: true,
       },
     });
 
-    return ride;
+    if (!ride) {
+      return null;
+    }
+
+    // Format response
+    return {
+      id: ride.id,
+      rideNumber: ride.rideNumber,
+      status: ride.status,
+      statusArabic: this.translateStatus(ride.status),
+      bookingSource: ride.bookingSource,
+      paymentMethod: ride.paymentMethod,
+      paymentStatus: ride.paymentStatus,
+      
+      // Consumer info
+      consumer: {
+        id: ride.consumer.id,
+        name: `${ride.consumer.user.firstName || ''} ${ride.consumer.user.lastName || ''}`.trim() || 'عميل',
+        phone: ride.consumer.user.phone,
+        avatar: ride.consumer.user.avatar,
+      },
+      
+      // Driver info
+      driver: ride.driver ? {
+        id: ride.driver.id,
+        name: `${ride.driver.user.firstName || ''} ${ride.driver.user.lastName || ''}`.trim() || 'سائق',
+        phone: ride.driver.user.phone,
+        avatar: ride.driver.user.avatar,
+        rating: Number(ride.driver.rating),
+        totalTrips: ride.driver.totalTrips,
+      } : null,
+      
+      // Vehicle info
+      vehicle: ride.vehicle ? {
+        brand: ride.vehicle.brand,
+        model: ride.vehicle.model,
+        year: ride.vehicle.year,
+        color: ride.vehicle.color,
+        plateNumber: ride.vehicle.plateNumber,
+      } : null,
+      
+      // Location info
+      pickup: {
+        address: ride.pickupAddress,
+        lat: Number(ride.pickupLat),
+        lng: Number(ride.pickupLng),
+      },
+      dropoff: {
+        address: ride.dropoffAddress,
+        lat: Number(ride.dropoffLat),
+        lng: Number(ride.dropoffLng),
+      },
+      
+      // Trip details
+      distanceKm: Number(ride.distanceKm),
+      durationMin: ride.durationMin,
+      estimatedFare: Number(ride.estimatedFare),
+      finalFare: ride.finalFare ? Number(ride.finalFare) : null,
+      discount: Number(ride.discount),
+      surgeMultiplier: Number(ride.surgeMultiplier),
+      
+      // Vehicle type
+      vehicleType: ride.vehicleType ? {
+        id: ride.vehicleType.id,
+        name: ride.vehicleType.name,
+        nameAr: ride.vehicleType.nameAr,
+      } : null,
+      
+      // Timestamps
+      requestedAt: ride.requestedAt,
+      acceptedAt: ride.acceptedAt,
+      arrivedAt: ride.arrivedAt,
+      startedAt: ride.startedAt,
+      completedAt: ride.completedAt,
+      cancelledAt: ride.cancelledAt,
+      
+      // Additional info
+      cancelReason: ride.cancelReason,
+      cancelledBy: ride.cancelledBy,
+      riderNotes: ride.riderNotes,
+      driverNotes: ride.driverNotes,
+    };
   }
 
   private translateStatus(status: string): string {
@@ -478,6 +577,41 @@ export class AdminService {
       estimatedFare: Number(estimatedFare.toFixed(0)),
       distanceKm: Number(calculatedDistanceKm.toFixed(2)),
       durationMin: calculatedDurationMin,
+    };
+  }
+
+  async cancelRide(id: string, reason?: string) {
+    const ride = await this.prisma.ride.findUnique({
+      where: { id },
+    });
+
+    if (!ride) {
+      return {
+        success: false,
+        message: 'الرحلة غير موجودة',
+      };
+    }
+
+    if (ride.status === 'COMPLETED' || ride.status === 'CANCELLED_BY_RIDER' || ride.status === 'CANCELLED_BY_DRIVER') {
+      return {
+        success: false,
+        message: 'لا يمكن إلغاء هذه الرحلة',
+      };
+    }
+
+    await this.prisma.ride.update({
+      where: { id },
+      data: {
+        status: 'CANCELLED_BY_RIDER', // Using CANCELLED_BY_RIDER for admin cancellations
+        cancelledAt: new Date(),
+        cancelReason: reason || 'تم الإلغاء من قبل الإدارة',
+        cancelledBy: 'ADMIN',
+      },
+    });
+
+    return {
+      success: true,
+      message: 'تم إلغاء الرحلة بنجاح',
     };
   }
 }

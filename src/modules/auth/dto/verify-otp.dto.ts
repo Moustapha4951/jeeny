@@ -3,8 +3,8 @@ import { IsString, IsNotEmpty, Matches, Length, IsOptional } from 'class-validat
 export class VerifyOtpDto {
   @IsString()
   @IsNotEmpty()
-  @Matches(/^\+222\d{8}$/, {
-    message: 'Phone number must be in format +222XXXXXXXX (Mauritanian format)',
+  @Matches(/^\+\d{10,15}$/, {
+    message: 'Phone number must be in international format (e.g., +222XXXXXXXX)',
   })
   phoneNumber!: string;
 

@@ -239,7 +239,7 @@ export class AdminService {
       
       return {
         id: ride.id,
-        rideNumber: ride.rideNumber,
+        rideNumber: this.generateReadableRideNumber(ride.id, ride.createdAt),
         passenger: consumerName,
         driver: driverName,
         status: this.translateStatus(ride.status),
@@ -295,7 +295,7 @@ export class AdminService {
     // Format response
     return {
       id: ride.id,
-      rideNumber: ride.rideNumber,
+      rideNumber: this.generateReadableRideNumber(ride.id, ride.createdAt),
       status: ride.status,
       statusArabic: this.translateStatus(ride.status),
       bookingSource: ride.bookingSource,
@@ -332,13 +332,13 @@ export class AdminService {
       // Location info
       pickup: {
         address: ride.pickupAddress,
-        lat: Number(ride.pickupLat),
-        lng: Number(ride.pickupLng),
+        latitude: Number(ride.pickupLat),
+        longitude: Number(ride.pickupLng),
       },
       dropoff: {
         address: ride.dropoffAddress,
-        lat: Number(ride.dropoffLat),
-        lng: Number(ride.dropoffLng),
+        latitude: Number(ride.dropoffLat),
+        longitude: Number(ride.dropoffLng),
       },
       
       // Trip details
@@ -386,6 +386,13 @@ export class AdminService {
     };
 
     return statusMap[status] || status;
+  }
+
+  private generateReadableRideNumber(rideId: string, createdAt: Date): string {
+    // Generate a readable ride number like: JNY-20250101-1234
+    const date = createdAt.toISOString().slice(0, 10).replace(/-/g, '');
+    const shortId = rideId.slice(0, 8).toUpperCase();
+    return `JNY-${date}-${shortId}`;
   }
 
   async bookRideForCustomer(bookingData: any) {

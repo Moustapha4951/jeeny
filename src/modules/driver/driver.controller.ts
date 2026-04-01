@@ -61,19 +61,30 @@ export class DriverController {
         },
       });
 
-      // Create driver wallet
-      await this.prisma.wallet.create({
-        data: {
+      // Check if driver wallet exists, if not create one
+      const existingWallet = await this.prisma.wallet.findFirst({
+        where: {
           userId: req.user.id,
           type: 'DRIVER',
-          balance: 0,
-          currency: 'MRU',
         },
       });
+
+      if (!existingWallet) {
+        await this.prisma.wallet.create({
+          data: {
+            userId: req.user.id,
+            type: 'DRIVER',
+            balance: 0,
+            currency: 'MRU',
+          },
+        });
+      }
     }
 
     return { success: true, driver };
   }
+
+  @Post('location')
   async updateLocation(
     @Request() req: any,
     @Body() body: { latitude: number; longitude: number },

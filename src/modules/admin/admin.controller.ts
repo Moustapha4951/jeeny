@@ -56,6 +56,12 @@ export class AdminController {
     return this.adminService.checkCustomerByPhone(phone);
   }
 
+  // Get all vehicle types
+  @Get('vehicle-types')
+  async getVehicleTypes() {
+    return this.adminService.getVehicleTypes();
+  }
+
   // Public endpoint for testing
   @Get('rides/:id')
   async getRideById(@Param('id') id: string) {

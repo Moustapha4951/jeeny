@@ -423,6 +423,16 @@ export class AdminService {
     return { exists: false };
   }
 
+  async getVehicleTypes() {
+    const vehicleTypes = await this.prisma.vehicleType.findMany({
+      orderBy: {
+        basePrice: 'asc',
+      },
+    });
+
+    return vehicleTypes;
+  }
+
   async bookRideForCustomer(bookingData: any) {
     const {
       customerPhone,

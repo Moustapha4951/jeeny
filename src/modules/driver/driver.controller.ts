@@ -61,15 +61,21 @@ export class DriverController {
         },
       });
 
-      // Check if driver wallet exists, if not create one
+      // Check if any wallet exists for this user
       const existingWallet = await this.prisma.wallet.findFirst({
         where: {
           userId: req.user.id,
-          type: 'DRIVER',
         },
       });
 
-      if (!existingWallet) {
+      // If wallet exists but is CONSUMER type, update it to DRIVER
+      if (existingWallet && existingWallet.type === 'CONSUMER') {
+        await this.prisma.wallet.update({
+          where: { id: existingWallet.id },
+          data: { type: 'DRIVER' },
+        });
+      } else if (!existingWallet) {
+        // Create new wallet if none exists
         await this.prisma.wallet.create({
           data: {
             userId: req.user.id,

@@ -437,6 +437,8 @@ export class AdminService {
       vehicleTypeId,
     } = bookingData;
 
+    console.log('Booking data received:', { customerPhone, customerName });
+
     // Find or create consumer by phone number
     let consumer = await this.prisma.consumer.findFirst({
       where: {
@@ -449,12 +451,16 @@ export class AdminService {
       },
     });
 
+    console.log('Consumer found:', consumer ? 'Yes' : 'No');
+
     // If consumer doesn't exist, create one
     if (!consumer) {
       // Split customer name into first and last name
       const nameParts = (customerName || 'عميل جديد').trim().split(' ');
       const firstName = nameParts[0] || 'عميل';
       const lastName = nameParts.slice(1).join(' ') || 'جديد';
+      
+      console.log('Creating new user with:', { firstName, lastName, phone: customerPhone });
       
       const user = await this.prisma.user.create({
         data: {
@@ -464,6 +470,8 @@ export class AdminService {
           lastName: lastName,
         },
       });
+
+      console.log('User created:', user.id);
 
       consumer = await this.prisma.consumer.create({
         data: {

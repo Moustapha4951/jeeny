@@ -763,10 +763,15 @@ model VehicleType {
   nameAr          String
   nameFr          String
   description     String?
+  image           String?  // Vehicle type image
   basePrice       Decimal  @db.Decimal(10, 2)
   pricePerKm      Decimal  @db.Decimal(6, 2)
   pricePerMin     Decimal  @db.Decimal(6, 2)
   minFare         Decimal  @db.Decimal(10, 2)
+  nightPriceMultiplier Decimal @default(1.0) @db.Decimal(3, 2) // After 00:00
+  adminCommission Decimal  @default(15.0) @db.Decimal(4, 2) // Percentage
+  driverCommission Decimal @default(85.0) @db.Decimal(4, 2) // Percentage
+  cancellationFee Decimal  @default(0) @db.Decimal(10, 2)
   capacity        Int
   icon            String
   isActive        Boolean  @default(true)

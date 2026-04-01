@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Param, Body, UseGuards, Query } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Param, Body, UseGuards, Query } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -108,5 +108,36 @@ export class AdminController {
   @Put('settings/:key')
   async updateSystemSetting(@Param('key') key: string, @Body() data: any) {
     return this.adminService.updateSystemSetting(key, data);
+  }
+
+  // ===== Zones Management =====
+  @Get('zones')
+  async getZones() {
+    return this.adminService.getZones();
+  }
+
+  @Get('zones/:id')
+  async getZone(@Param('id') id: string) {
+    return this.adminService.getZone(id);
+  }
+
+  @Post('zones')
+  async createZone(@Body() data: any) {
+    return this.adminService.createZone(data);
+  }
+
+  @Put('zones/:id')
+  async updateZone(@Param('id') id: string, @Body() data: any) {
+    return this.adminService.updateZone(id, data);
+  }
+
+  @Delete('zones/:id')
+  async deleteZone(@Param('id') id: string) {
+    return this.adminService.deleteZone(id);
+  }
+
+  @Put('zones/:id/toggle')
+  async toggleZone(@Param('id') id: string) {
+    return this.adminService.toggleZone(id);
   }
 }

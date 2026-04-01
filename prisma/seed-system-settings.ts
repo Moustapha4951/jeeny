@@ -208,6 +208,64 @@ async function main() {
       descriptionAr: 'تفعيل مشاركة تفاصيل الرحلة',
       descriptionEn: 'Enable ride sharing',
     },
+
+    // General Settings
+    {
+      key: 'app_maintenance_mode',
+      value: false,
+      valueType: 'BOOLEAN',
+      category: 'GENERAL',
+      descriptionAr: 'وضع الصيانة',
+      descriptionEn: 'Maintenance mode',
+    },
+    {
+      key: 'max_search_radius_km',
+      value: 10,
+      valueType: 'NUMBER',
+      category: 'GENERAL',
+      descriptionAr: 'نطاق البحث الأقصى (كم)',
+      descriptionEn: 'Maximum search radius (km)',
+    },
+    {
+      key: 'support_phone',
+      value: '+222 12345678',
+      valueType: 'STRING',
+      category: 'GENERAL',
+      descriptionAr: 'رقم الدعم الفني',
+      descriptionEn: 'Support phone number',
+    },
+    {
+      key: 'support_email',
+      value: 'support@jeeny.mr',
+      valueType: 'STRING',
+      category: 'GENERAL',
+      descriptionAr: 'البريد الإلكتروني للدعم',
+      descriptionEn: 'Support email',
+    },
+    {
+      key: 'app_version_android',
+      value: '1.0.0',
+      valueType: 'STRING',
+      category: 'GENERAL',
+      descriptionAr: 'إصدار التطبيق (أندرويد)',
+      descriptionEn: 'App version (Android)',
+    },
+    {
+      key: 'app_version_ios',
+      value: '1.0.0',
+      valueType: 'STRING',
+      category: 'GENERAL',
+      descriptionAr: 'إصدار التطبيق (iOS)',
+      descriptionEn: 'App version (iOS)',
+    },
+    {
+      key: 'force_update',
+      value: false,
+      valueType: 'BOOLEAN',
+      category: 'GENERAL',
+      descriptionAr: 'فرض التحديث',
+      descriptionEn: 'Force update',
+    },
   ];
 
   for (const setting of settings) {

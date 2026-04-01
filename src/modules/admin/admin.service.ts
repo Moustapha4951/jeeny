@@ -816,4 +816,137 @@ export class AdminService {
       setting: updated,
     };
   }
+
+  // ===== Zones Management =====
+  async getZones() {
+    const zones = await this.prisma.zone.findMany({
+      include: {
+        city: true,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+    return zones;
+  }
+
+  async getZone(id: string) {
+    const zone = await this.prisma.zone.findUnique({
+      where: { id },
+      include: {
+        city: true,
+      },
+    });
+
+    if (!zone) {
+      throw new Error('المنطقة غير موجودة');
+    }
+
+    return zone;
+  }
+
+  async createZone(data: any) {
+    const zone = await this.prisma.zone.create({
+      data: {
+        name: data.name,
+        nameAr: data.nameAr,
+        nameFr: data.nameFr || data.name,
+        type: data.type,
+        polygon: data.polygon,
+        center: data.center,
+        isActive: data.isActive !== undefined ? data.isActive : true,
+        surgeMultiplier: data.surgeMultiplier || 1.0,
+        restrictions: data.restrictions || null,
+        cityId: data.cityId || null,
+      },
+      include: {
+        city: true,
+      },
+    });
+
+    return {
+      success: true,
+      message: 'تم إنشاء المنطقة بنجاح',
+      zone,
+    };
+  }
+
+  async updateZone(id: string, data: any) {
+    const zone = await this.prisma.zone.findUnique({
+      where: { id },
+    });
+
+    if (!zone) {
+      throw new Error('المنطقة غير موجودة');
+    }
+
+    const updated = await this.prisma.zone.update({
+      where: { id },
+      data: {
+        name: data.name !== undefined ? data.name : zone.name,
+        nameAr: data.nameAr !== undefined ? data.nameAr : zone.nameAr,
+        nameFr: data.nameFr !== undefined ? data.nameFr : zone.nameFr,
+        type: data.type !== undefined ? data.type : zone.type,
+        polygon: data.polygon !== undefined ? data.polygon : zone.polygon,
+        center: data.center !== undefined ? data.center : zone.center,
+        isActive: data.isActive !== undefined ? data.isActive : zone.isActive,
+        surgeMultiplier: data.surgeMultiplier !== undefined ? data.surgeMultiplier : zone.surgeMultiplier,
+        restrictions: data.restrictions !== undefined ? data.restrictions : zone.restrictions,
+        cityId: data.cityId !== undefined ? data.cityId : zone.cityId,
+      },
+      include: {
+        city: true,
+      },
+    });
+
+    return {
+      success: true,
+      message: 'تم تحديث المنطقة بنجاح',
+      zone: updated,
+    };
+  }
+
+  async deleteZone(id: string) {
+    const zone = await this.prisma.zone.findUnique({
+      where: { id },
+    });
+
+    if (!zone) {
+      throw new Error('المنطقة غير موجودة');
+    }
+
+    await this.prisma.zone.delete({
+      where: { id },
+    });
+
+    return {
+      success: true,
+      message: 'تم حذف المنطقة بنجاح',
+    };
+  }
+
+  async toggleZone(id: string) {
+    const zone = await this.prisma.zone.findUnique({
+      where: { id },
+    });
+
+    if (!zone) {
+      throw new Error('المنطقة غير موجودة');
+    }
+
+    const updated = await this.prisma.zone.update({
+      where: { id },
+      data: {
+        isActive: !zone.isActive,
+      },
+    });
+
+    return {
+      success: true,
+      message: zone.isActive ? 'تم تعطيل المنطقة' : 'تم تفعيل المنطقة',
+      zone: updated,
+    };
+  }
 }
+

@@ -15,10 +15,10 @@ export class DriverService {
       include: {
         driver: {
           include: {
-            vehicle: true,
+            vehicles: true,
           },
         },
-        wallet: true,
+        wallets: true,
       },
     });
 
@@ -26,14 +26,17 @@ export class DriverService {
       throw new NotFoundException('Driver profile not found');
     }
 
+    // Get the driver's wallet
+    const wallet = user.wallets.find(w => w.type === 'DRIVER');
+
     return {
       id: user.id,
       firstName: user.firstName,
       lastName: user.lastName,
       phone: user.phone,
-      profilePicture: user.profilePicture,
+      avatar: user.avatar,
       driver: user.driver,
-      wallet: user.wallet,
+      wallet: wallet,
       isOnline: user.driver.isOnline,
     };
   }
@@ -51,15 +54,15 @@ export class DriverService {
     await this.prisma.driver.update({
       where: { userId },
       data: {
-        currentLatitude: latitude,
-        currentLongitude: longitude,
-        lastLocationUpdate: new Date(),
+        currentLat: latitude,
+        currentLng: longitude,
+        lastLocationAt: new Date(),
       },
     });
 
     // Update location in Redis for real-time tracking
     if (driver.isOnline) {
-      await this.redis.geoadd(
+      await this.redis.geoAdd(
         'drivers:online',
         longitude,
         latitude,
@@ -85,15 +88,15 @@ export class DriverService {
     });
 
     // Update Redis
-    if (isOnline && driver.currentLatitude && driver.currentLongitude) {
-      await this.redis.geoadd(
+    if (isOnline && driver.currentLat && driver.currentLng) {
+      await this.redis.geoAdd(
         'drivers:online',
-        driver.currentLongitude,
-        driver.currentLatitude,
+        Number(driver.currentLng),
+        Number(driver.currentLat),
         driver.id,
       );
     } else {
-      await this.redis.zrem('drivers:online', driver.id);
+      await this.redis.zRem('drivers:online', driver.id);
     }
 
     return { success: true, isOnline };
@@ -112,7 +115,7 @@ export class DriverService {
       where: {
         driverId: driver.id,
         status: {
-          in: ['PENDING', 'ACCEPTED', 'DRIVER_ARRIVED', 'IN_PROGRESS'],
+          in: ['DRIVER_ASSIGNED', 'DRIVER_ARRIVED', 'IN_PROGRESS'],
         },
       },
       include: {
@@ -141,7 +144,7 @@ export class DriverService {
       where: {
         driverId: driver.id,
         status: {
-          in: ['COMPLETED', 'CANCELLED'],
+          in: ['COMPLETED', 'CANCELLED_BY_RIDER', 'CANCELLED_BY_DRIVER'],
         },
       },
       include: {
@@ -171,9 +174,9 @@ export class DriverService {
     const ride = await this.prisma.ride.update({
       where: { id: rideId },
       data: {
-        status: 'ACCEPTED',
+        status: 'DRIVER_ASSIGNED',
         driverId: driver.id,
-        acceptedAt: new Date(),
+        driverAssignedAt: new Date(),
       },
     });
 
@@ -222,9 +225,9 @@ export class DriverService {
       },
     });
 
-    const totalEarnings = rides.reduce((sum, ride) => sum + (ride.finalFare || 0), 0);
+    const totalEarnings = rides.reduce((sum, ride) => sum + Number(ride.finalFare || 0), 0);
     const totalRides = rides.length;
-    const totalDistance = rides.reduce((sum, ride) => sum + (ride.distance || 0), 0);
+    const totalDistance = rides.reduce((sum, ride) => sum + Number(ride.distanceKm || 0), 0);
 
     return {
       totalEarnings,
@@ -236,7 +239,10 @@ export class DriverService {
 
   async getWallet(userId: string) {
     const wallet = await this.prisma.wallet.findFirst({
-      where: { userId },
+      where: { 
+        userId,
+        type: 'DRIVER',
+      },
     });
 
     if (!wallet) {

@@ -28,9 +28,14 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   async sendOtp(@Body() sendOtpDto: SendOtpDto) {
     await this.otpService.sendOTP(sendOtpDto.phoneNumber);
+    
+    // DEV MODE: Return OTP in response for testing
+    const otp = await this.otpService.getOTPForDev(sendOtpDto.phoneNumber);
+    
     return {
       message: 'OTP sent successfully',
       expiresIn: 300, // 5 minutes
+      otp: otp, // DEV ONLY - Remove in production!
     };
   }
 

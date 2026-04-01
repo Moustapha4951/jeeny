@@ -45,15 +45,21 @@ export class OtpService {
 
     // Send OTP via SMS (using Firebase or SMS gateway)
     try {
-      // For now, log the OTP (in production, send via SMS gateway)
-      this.logger.log(`OTP for ${phoneNumber}: ${otp}`);
+      // For development: Log OTP to console AND return it
+      this.logger.warn(`🔐 OTP for ${phoneNumber}: ${otp} (DEV MODE - Remove in production!)`);
       
-      // TODO: Integrate with SMS gateway
+      // TODO: Integrate with SMS gateway for production
       // await this.sendSMS(phoneNumber, `Your Jeeny verification code is: ${otp}`);
     } catch (error) {
       this.logger.error('Failed to send OTP:', error);
       throw new BadRequestException('Failed to send OTP. Please try again.');
     }
+  }
+
+  async getOTPForDev(phoneNumber: string): Promise<string | null> {
+    // DEV ONLY: Get OTP from Redis for testing
+    const otpKey = `otp:${phoneNumber}`;
+    return await this.redis.get(otpKey);
   }
 
   async verifyOTP(phoneNumber: string, otp: string): Promise<boolean> {

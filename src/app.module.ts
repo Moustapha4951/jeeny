@@ -11,6 +11,7 @@ import { UsersModule } from './modules/users/users.module';
 import { WalletModule } from './modules/wallet/wallet.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { AdminModule } from './modules/admin/admin.module';
+import { DriverModule } from './modules/driver/driver.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { validate } from './config/env.validation';
@@ -30,6 +31,7 @@ import { validate } from './config/env.validation';
     WalletModule,
     PaymentsModule,
     AdminModule,
+    DriverModule,
   ],
   controllers: [AppController],
   providers: [

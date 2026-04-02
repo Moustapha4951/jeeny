@@ -1,9 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { WalletService } from '../wallet/wallet.service';
 
 @Injectable()
 export class AdminService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private walletService: WalletService,
+  ) {}
 
   async getDashboardStats() {
     // Get total drivers
@@ -951,6 +955,60 @@ export class AdminService {
       success: true,
       message: zone.isActive ? 'تم تعطيل المنطقة' : 'تم تفعيل المنطقة',
       zone: updated,
+    };
+  }
+
+  async creditDriverWallet(driverId: string, amount: number, description: string) {
+    const driver = await this.prisma.driver.findUnique({
+      where: { id: driverId },
+    });
+
+    if (!driver) {
+      throw new Error('Driver not found');
+    }
+
+    // Use WalletService to trigger WebSocket event
+    await this.walletService.creditBalance(
+      driver.userId,
+      amount,
+      description || 'Admin credit',
+    );
+
+    const wallet = await this.prisma.wallet.findUnique({
+      where: { userId: driver.userId },
+    });
+
+    return {
+      success: true,
+      message: 'تم إضافة الرصيد بنجاح',
+      balance: wallet?.balance,
+    };
+  }
+
+  async debitDriverWallet(driverId: string, amount: number, description: string) {
+    const driver = await this.prisma.driver.findUnique({
+      where: { id: driverId },
+    });
+
+    if (!driver) {
+      throw new Error('Driver not found');
+    }
+
+    // Use WalletService to trigger WebSocket event
+    await this.walletService.debitBalance(
+      driver.userId,
+      amount,
+      description || 'Admin debit',
+    );
+
+    const wallet = await this.prisma.wallet.findUnique({
+      where: { userId: driver.userId },
+    });
+
+    return {
+      success: true,
+      message: 'تم خصم الرصيد بنجاح',
+      balance: wallet?.balance,
     };
   }
 }

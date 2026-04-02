@@ -140,4 +140,21 @@ export class AdminController {
   async toggleZone(@Param('id') id: string) {
     return this.adminService.toggleZone(id);
   }
+
+  // Update driver wallet balance (public for testing)
+  @Post('drivers/:id/wallet/credit')
+  async creditDriverWallet(
+    @Param('id') driverId: string,
+    @Body() body: { amount: number; description: string },
+  ) {
+    return this.adminService.creditDriverWallet(driverId, body.amount, body.description);
+  }
+
+  @Post('drivers/:id/wallet/debit')
+  async debitDriverWallet(
+    @Param('id') driverId: string,
+    @Body() body: { amount: number; description: string },
+  ) {
+    return this.adminService.debitDriverWallet(driverId, body.amount, body.description);
+  }
 }

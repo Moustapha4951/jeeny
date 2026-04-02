@@ -20,7 +20,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 })
 export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
-  server: Server;
+  server!: Server;
 
   private driverSockets = new Map<string, string>(); // driverId -> socketId
 
@@ -75,9 +75,9 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
       await this.prisma.driver.update({
         where: { id: driverId },
         data: {
-          currentLatitude: data.latitude,
-          currentLongitude: data.longitude,
-          lastLocationUpdate: new Date(),
+          currentLat: data.latitude,
+          currentLng: data.longitude,
+          lastLocationAt: new Date(),
         },
       });
     } catch (error) {
@@ -101,16 +101,16 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
               phone: true,
             },
           },
-          wallet: {
-            select: {
-              balance: true,
-            },
-          },
-          vehicle: true,
+          vehicles: true,
         },
       });
 
       if (driver) {
+        // Get wallet separately
+        const wallet = await this.prisma.wallet.findUnique({
+          where: { userId: driver.userId },
+        });
+
         this.server.to(socketId).emit('driver:update', {
           id: driver.id,
           firstName: driver.user.firstName,
@@ -118,11 +118,11 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
           phone: driver.user.phone,
           isOnline: driver.isOnline,
           rating: driver.rating,
-          totalRides: driver.totalRides,
+          totalRides: driver.totalTrips,
           wallet: {
-            balance: driver.wallet?.balance || 0,
+            balance: wallet?.balance || 0,
           },
-          vehicle: driver.vehicle,
+          vehicle: driver.vehicles?.[0] || null,
         });
       }
     } catch (error) {

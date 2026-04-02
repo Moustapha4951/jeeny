@@ -985,8 +985,9 @@ export class AdminService {
 
     // Send FCM notification
     if (driver.user.fcmToken) {
+      console.log(`📱 Sending FCM notification to driver ${driver.id}, token: ${driver.user.fcmToken.substring(0, 20)}...`);
       try {
-        await this.firebaseService.sendNotification(
+        const result = await this.firebaseService.sendNotification(
           driver.user.fcmToken,
           'تم إضافة رصيد',
           `تم إضافة ${amount} أوقية إلى محفظتك. ${description}`,
@@ -996,9 +997,12 @@ export class AdminService {
             balance: wallet?.balance.toString() || '0',
           },
         );
+        console.log(`✅ FCM notification sent successfully: ${result}`);
       } catch (error) {
-        console.error('Failed to send FCM notification:', error);
+        console.error('❌ Failed to send FCM notification:', error);
       }
+    } else {
+      console.log(`⚠️ No FCM token for driver ${driver.id}`);
     }
 
     return {

@@ -266,21 +266,41 @@ export class DriverService {
     const { documentType, fileUrl } = uploadDocumentDto;
 
     // Map document type to database field
-    const fieldMap = {
+    const driverFieldMap = {
       [DocumentType.LICENSE]: 'licenseImage',
       [DocumentType.NATIONAL_ID]: 'nationalIdImage',
       [DocumentType.PROFILE_PHOTO]: 'profilePhoto',
     };
 
-    const field = fieldMap[documentType];
+    const vehicleFieldMap = {
+      [DocumentType.VEHICLE_REG]: 'registrationImage',
+      [DocumentType.INSURANCE]: 'insuranceImage',
+      [DocumentType.VEHICLE_PHOTO]: 'inspectionImage',
+    };
 
     // Update driver document
-    await this.prisma.driver.update({
-      where: { userId },
-      data: {
-        [field]: fileUrl,
-      },
-    });
+    if (driverFieldMap[documentType]) {
+      await this.prisma.driver.update({
+        where: { userId },
+        data: {
+          [driverFieldMap[documentType]]: fileUrl,
+        },
+      });
+    } else if (vehicleFieldMap[documentType]) {
+      // Update vehicle document - get first vehicle or create one
+      const vehicle = await this.prisma.vehicle.findFirst({
+        where: { driverId: driver.id },
+      });
+
+      if (vehicle) {
+        await this.prisma.vehicle.update({
+          where: { id: vehicle.id },
+          data: {
+            [vehicleFieldMap[documentType]]: fileUrl,
+          },
+        });
+      }
+    }
 
     return {
       success: true,

@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../../redis/redis.service';
 import { DriverGateway } from './driver.gateway';
+import { UploadDocumentDto, DocumentType } from './dto/upload-document.dto';
 
 @Injectable()
 export class DriverService {
@@ -251,5 +252,62 @@ export class DriverService {
     }
 
     return wallet;
+  }
+
+  async uploadDocument(userId: string, uploadDocumentDto: UploadDocumentDto) {
+    const driver = await this.prisma.driver.findUnique({
+      where: { userId },
+    });
+
+    if (!driver) {
+      throw new NotFoundException('Driver not found');
+    }
+
+    const { documentType, fileUrl } = uploadDocumentDto;
+
+    // Map document type to database field
+    const fieldMap = {
+      [DocumentType.LICENSE]: 'licenseImage',
+      [DocumentType.NATIONAL_ID]: 'nationalIdImage',
+      [DocumentType.PROFILE_PHOTO]: 'profilePhoto',
+    };
+
+    const field = fieldMap[documentType];
+
+    // Update driver document
+    await this.prisma.driver.update({
+      where: { userId },
+      data: {
+        [field]: fileUrl,
+      },
+    });
+
+    return {
+      success: true,
+      message: 'Document uploaded successfully',
+      documentType,
+      fileUrl,
+    };
+  }
+
+  async getDocuments(userId: string) {
+    const driver = await this.prisma.driver.findUnique({
+      where: { userId },
+      select: {
+        licenseImage: true,
+        nationalIdImage: true,
+        profilePhoto: true,
+      },
+    });
+
+    if (!driver) {
+      throw new NotFoundException('Driver not found');
+    }
+
+    return {
+      licenseImage: driver.licenseImage,
+      nationalIdImage: driver.nationalIdImage,
+      profilePhoto: driver.profilePhoto,
+    };
   }
 }

@@ -11,6 +11,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { PrismaService } from '../../prisma/prisma.service';
+import { UploadDocumentDto } from './dto/upload-document.dto';
 
 @Controller('driver')
 @UseGuards(JwtAuthGuard)
@@ -173,5 +174,18 @@ export class DriverController {
   @Get('wallet')
   async getWallet(@Request() req: any) {
     return this.driverService.getWallet(req.user.id);
+  }
+
+  @Post('documents/upload')
+  async uploadDocument(
+    @Request() req: any,
+    @Body() uploadDocumentDto: UploadDocumentDto,
+  ) {
+    return this.driverService.uploadDocument(req.user.id, uploadDocumentDto);
+  }
+
+  @Get('documents')
+  async getDocuments(@Request() req: any) {
+    return this.driverService.getDocuments(req.user.id);
   }
 }

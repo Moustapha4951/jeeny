@@ -30,64 +30,77 @@ export class DriverController {
     @Request() req: any,
     @Body() body: { firstName: string; lastName: string },
   ) {
-    // Update user name
-    await this.prisma.user.update({
-      where: { id: req.user.id },
-      data: {
-        firstName: body.firstName,
-        lastName: body.lastName,
-      },
-    });
-
-    // Check if driver profile exists, if not create one
-    let driver = await this.prisma.driver.findUnique({
-      where: { userId: req.user.id },
-    });
-
-    if (!driver) {
-      // Create driver profile with minimal required fields
-      driver = await this.prisma.driver.create({
+    try {
+      // Update user name
+      await this.prisma.user.update({
+        where: { id: req.user.id },
         data: {
-          userId: req.user.id,
-          licenseNumber: `TEMP-${req.user.id.substring(0, 8)}`, // Temporary
-          licenseExpiry: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 1 year from now
-          nationalId: `TEMP-${req.user.id.substring(0, 8)}`, // Temporary
-          dateOfBirth: new Date('1990-01-01'), // Default
-          gender: 'MALE', // Default
-          address: 'Nouakchott', // Default
-          city: 'Nouakchott',
-          state: 'Nouakchott',
-          status: 'PENDING',
+          firstName: body.firstName,
+          lastName: body.lastName,
         },
       });
 
-      // Check if any wallet exists for this user
-      const existingWallet = await this.prisma.wallet.findFirst({
-        where: {
-          userId: req.user.id,
-        },
+      // Check if driver profile exists, if not create one
+      let driver = await this.prisma.driver.findUnique({
+        where: { userId: req.user.id },
       });
 
-      // If wallet exists but is CONSUMER type, update it to DRIVER
-      if (existingWallet && existingWallet.type === 'CONSUMER') {
-        await this.prisma.wallet.update({
-          where: { id: existingWallet.id },
-          data: { type: 'DRIVER' },
-        });
-      } else if (!existingWallet) {
-        // Create new wallet if none exists
-        await this.prisma.wallet.create({
+      if (!driver) {
+        console.log('Creating driver profile for user:', req.user.id);
+        
+        // Create driver profile with minimal required fields
+        driver = await this.prisma.driver.create({
           data: {
             userId: req.user.id,
-            type: 'DRIVER',
-            balance: 0,
-            currency: 'MRU',
+            licenseNumber: `TEMP-${req.user.id.substring(0, 8)}`, // Temporary
+            licenseExpiry: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 1 year from now
+            nationalId: `TEMP-${req.user.id.substring(0, 8)}`, // Temporary
+            dateOfBirth: new Date('1990-01-01'), // Default
+            gender: 'MALE', // Default
+            address: 'Nouakchott', // Default
+            city: 'Nouakchott',
+            state: 'Nouakchott',
+            status: 'PENDING',
           },
         });
-      }
-    }
+        
+        console.log('Driver profile created:', driver.id);
 
-    return { success: true, driver };
+        // Check if any wallet exists for this user
+        const existingWallet = await this.prisma.wallet.findFirst({
+          where: {
+            userId: req.user.id,
+          },
+        });
+
+        // If wallet exists but is CONSUMER type, update it to DRIVER
+        if (existingWallet && existingWallet.type === 'CONSUMER') {
+          await this.prisma.wallet.update({
+            where: { id: existingWallet.id },
+            data: { type: 'DRIVER' },
+          });
+          console.log('Updated wallet type to DRIVER');
+        } else if (!existingWallet) {
+          // Create new wallet if none exists
+          await this.prisma.wallet.create({
+            data: {
+              userId: req.user.id,
+              type: 'DRIVER',
+              balance: 0,
+              currency: 'MRU',
+            },
+          });
+          console.log('Created new DRIVER wallet');
+        }
+      } else {
+        console.log('Driver profile already exists:', driver.id);
+      }
+
+      return { success: true, driver };
+    } catch (error) {
+      console.error('Error in updateProfile:', error);
+      throw error;
+    }
   }
 
   @Post('location')

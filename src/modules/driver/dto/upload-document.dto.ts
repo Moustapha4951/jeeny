@@ -9,9 +9,9 @@ export enum DocumentType {
 export class UploadDocumentDto {
   @IsEnum(DocumentType)
   @IsNotEmpty()
-  documentType: DocumentType;
+  documentType!: DocumentType;
 
   @IsString()
   @IsNotEmpty()
-  fileUrl: string;
+  fileUrl!: string;
 }

@@ -1,12 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { WalletService } from '../wallet/wallet.service';
+import { FirebaseService } from '../../firebase/firebase.service';
 
 @Injectable()
 export class AdminService {
   constructor(
     private prisma: PrismaService,
     private walletService: WalletService,
+    private firebaseService: FirebaseService,
   ) {}
 
   async getDashboardStats() {
@@ -961,6 +963,9 @@ export class AdminService {
   async creditDriverWallet(driverId: string, amount: number, description: string) {
     const driver = await this.prisma.driver.findUnique({
       where: { id: driverId },
+      include: {
+        user: true,
+      },
     });
 
     if (!driver) {
@@ -977,6 +982,24 @@ export class AdminService {
     const wallet = await this.prisma.wallet.findUnique({
       where: { userId: driver.userId },
     });
+
+    // Send FCM notification
+    if (driver.user.fcmToken) {
+      try {
+        await this.firebaseService.sendNotification(
+          driver.user.fcmToken,
+          'تم إضافة رصيد',
+          `تم إضافة ${amount} أوقية إلى محفظتك. ${description}`,
+          {
+            type: 'wallet_credit',
+            amount: amount.toString(),
+            balance: wallet?.balance.toString() || '0',
+          },
+        );
+      } catch (error) {
+        console.error('Failed to send FCM notification:', error);
+      }
+    }
 
     return {
       success: true,

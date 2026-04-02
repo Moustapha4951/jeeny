@@ -3,9 +3,10 @@ import { AdminController } from './admin.controller';
 import { AdminService } from './admin.service';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { WalletModule } from '../wallet/wallet.module';
+import { FirebaseModule } from '../../firebase/firebase.module';
 
 @Module({
-  imports: [PrismaModule, WalletModule],
+  imports: [PrismaModule, WalletModule, FirebaseModule],
   controllers: [AdminController],
   providers: [AdminService],
   exports: [AdminService],

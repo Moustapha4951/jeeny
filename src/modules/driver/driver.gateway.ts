@@ -149,17 +149,31 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
-  // Send wallet update to specific driver
-  async sendWalletUpdate(driverId: string) {
-    const socketId = this.driverSockets.get(driverId);
-    if (!socketId) return;
+  // Send wallet update to specific driver (pass userId, not driverId)
+  async sendWalletUpdate(userId: string) {
+    // Get driver ID from user ID
+    const driver = await this.prisma.driver.findUnique({
+      where: { userId },
+    });
+
+    if (!driver) {
+      console.log(`No driver found for user ${userId}`);
+      return;
+    }
+
+    const socketId = this.driverSockets.get(driver.id);
+    if (!socketId) {
+      console.log(`No socket found for driver ${driver.id}`);
+      return;
+    }
 
     try {
       const wallet = await this.prisma.wallet.findUnique({
-        where: { userId: driverId },
+        where: { userId },
       });
 
       if (wallet) {
+        console.log(`💰 Sending wallet update to driver ${driver.id}: balance=${wallet.balance}`);
         this.server.to(socketId).emit('wallet:update', {
           balance: wallet.balance,
         });

@@ -25,6 +25,15 @@ export class DriverController {
     return this.driverService.getProfile(req.user.id);
   }
 
+  @Post('fcm-token')
+  async updateFCMToken(@Request() req: any, @Body() body: { fcmToken: string }) {
+    await this.prisma.user.update({
+      where: { id: req.user.id },
+      data: { fcmToken: body.fcmToken },
+    });
+    return { success: true, message: 'FCM token updated' };
+  }
+
   @Post('profile')
   async updateProfile(
     @Request() req: any,

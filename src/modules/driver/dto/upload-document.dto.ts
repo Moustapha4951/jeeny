@@ -1,13 +1,13 @@
-import { IsString, IsEnum, IsNotEmpty } from 'class-validator';
+import { IsString, IsEnum, IsNotEmpty, IsOptional, IsDateString } from 'class-validator';
 
 export enum DocumentType {
-  LICENSE = 'license',
-  NATIONAL_ID = 'national_id',
-  PROFILE_PHOTO = 'profile_photo',
-  VEHICLE_REG = 'vehicle_reg',
-  INSURANCE = 'insurance',
-  VEHICLE_PHOTO = 'vehicle_photo',
-  CONTRACT = 'contract',
+  LICENSE = 'LICENSE',
+  NATIONAL_ID = 'NATIONAL_ID',
+  PROFILE_PHOTO = 'PROFILE_PHOTO',
+  VEHICLE_REG = 'VEHICLE_REG',
+  INSURANCE = 'INSURANCE',
+  VEHICLE_PHOTO = 'VEHICLE_PHOTO',
+  CONTRACT = 'CONTRACT',
 }
 
 export class UploadDocumentDto {
@@ -18,5 +18,8 @@ export class UploadDocumentDto {
   @IsString()
   @IsNotEmpty()
   fileUrl!: string;
-}
 
+  @IsOptional()
+  @IsDateString()
+  expiresAt?: string;
+}

@@ -263,9 +263,57 @@ export class DriverService {
       throw new NotFoundException('Driver not found');
     }
 
-    const { documentType, fileUrl } = uploadDocumentDto;
+    const { documentType, fileUrl, expiresAt } = uploadDocumentDto;
 
-    // Map document type to database field
+    // Map frontend document types to Prisma enum values
+    const typeMap: Record<string, string> = {
+      [DocumentType.LICENSE]: 'LICENSE',
+      [DocumentType.NATIONAL_ID]: 'NATIONAL_ID',
+      [DocumentType.PROFILE_PHOTO]: 'PROFILE_PHOTO',
+      [DocumentType.VEHICLE_REG]: 'VEHICLE_REG',
+      [DocumentType.INSURANCE]: 'INSURANCE',
+      [DocumentType.VEHICLE_PHOTO]: 'OTHER', // Map to OTHER since VEHICLE_PHOTO doesn't exist in Prisma
+      [DocumentType.CONTRACT]: 'CONTRACT',
+    };
+
+    const prismaDocType = typeMap[documentType] || documentType;
+
+    // Check if document already exists
+    const existingDoc = await this.prisma.document.findFirst({
+      where: {
+        userId,
+        type: prismaDocType as any,
+      },
+    });
+
+    let document;
+    if (existingDoc) {
+      // Update existing document
+      document = await this.prisma.document.update({
+        where: { id: existingDoc.id },
+        data: {
+          url: fileUrl,
+          status: 'PENDING',
+          expiresAt: expiresAt ? new Date(expiresAt) : null,
+          rejectionReason: null,
+          reviewedById: null,
+          reviewedAt: null,
+        },
+      });
+    } else {
+      // Create new document
+      document = await this.prisma.document.create({
+        data: {
+          userId,
+          type: prismaDocType as any,
+          url: fileUrl,
+          status: 'PENDING',
+          expiresAt: expiresAt ? new Date(expiresAt) : null,
+        },
+      });
+    }
+
+    // Also update legacy fields for backward compatibility
     const driverFieldMap: Record<string, string> = {
       [DocumentType.LICENSE]: 'licenseImage',
       [DocumentType.NATIONAL_ID]: 'nationalIdImage',
@@ -278,7 +326,6 @@ export class DriverService {
       [DocumentType.VEHICLE_PHOTO]: 'inspectionImage',
     };
 
-    // Update driver document
     if (driverFieldMap[documentType]) {
       await this.prisma.driver.update({
         where: { userId },
@@ -287,7 +334,6 @@ export class DriverService {
         },
       });
     } else if (vehicleFieldMap[documentType]) {
-      // Update vehicle document - get first vehicle or create one
       const vehicle = await this.prisma.vehicle.findFirst({
         where: { driverId: driver.id },
       });
@@ -305,29 +351,35 @@ export class DriverService {
     return {
       success: true,
       message: 'Document uploaded successfully',
-      documentType,
-      fileUrl,
+      document: {
+        id: document.id,
+        type: document.type,
+        url: document.url,
+        status: document.status,
+        rejectionReason: document.rejectionReason,
+        expiresAt: document.expiresAt,
+        createdAt: document.createdAt,
+        reviewedAt: document.reviewedAt,
+      },
     };
   }
 
   async getDocuments(userId: string) {
-    const driver = await this.prisma.driver.findUnique({
+    const documents = await this.prisma.document.findMany({
       where: { userId },
       select: {
-        licenseImage: true,
-        nationalIdImage: true,
-        profilePhoto: true,
+        id: true,
+        type: true,
+        url: true,
+        status: true,
+        rejectionReason: true,
+        expiresAt: true,
+        createdAt: true,
+        reviewedAt: true,
       },
+      orderBy: { createdAt: 'desc' },
     });
 
-    if (!driver) {
-      throw new NotFoundException('Driver not found');
-    }
-
-    return {
-      licenseImage: driver.licenseImage,
-      nationalIdImage: driver.nationalIdImage,
-      profilePhoto: driver.profilePhoto,
-    };
+    return { documents };
   }
 }

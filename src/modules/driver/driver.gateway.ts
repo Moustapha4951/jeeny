@@ -34,6 +34,7 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const token = client.handshake.auth.token || client.handshake.headers.authorization?.replace('Bearer ', '');
       
       if (!token) {
+        console.log('WebSocket connection rejected: No token provided');
         client.disconnect();
         return;
       }
@@ -45,7 +46,7 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
       this.driverSockets.set(driverId, client.id);
       client.data.driverId = driverId;
 
-      console.log(`Driver ${driverId} connected via WebSocket`);
+      console.log(`✅ Driver ${driverId} connected via WebSocket`);
 
       // Send initial data
       await this.sendDriverUpdate(driverId);

@@ -40,7 +40,13 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
       }
 
       const payload = this.jwtService.verify(token);
-      const userId = payload.sub;
+      const userId = payload.userId; // Changed from payload.sub to payload.userId
+
+      if (!userId) {
+        console.log('WebSocket connection rejected: No userId in token');
+        client.disconnect();
+        return;
+      }
 
       // Get driver ID from user ID
       const driver = await this.prisma.driver.findUnique({

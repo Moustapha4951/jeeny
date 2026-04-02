@@ -266,13 +266,13 @@ export class DriverService {
     const { documentType, fileUrl } = uploadDocumentDto;
 
     // Map document type to database field
-    const driverFieldMap = {
+    const driverFieldMap: Record<string, string> = {
       [DocumentType.LICENSE]: 'licenseImage',
       [DocumentType.NATIONAL_ID]: 'nationalIdImage',
       [DocumentType.PROFILE_PHOTO]: 'profilePhoto',
     };
 
-    const vehicleFieldMap = {
+    const vehicleFieldMap: Record<string, string> = {
       [DocumentType.VEHICLE_REG]: 'registrationImage',
       [DocumentType.INSURANCE]: 'insuranceImage',
       [DocumentType.VEHICLE_PHOTO]: 'inspectionImage',

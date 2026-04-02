@@ -1,9 +1,14 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, Inject, forwardRef } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { DriverGateway } from '../driver/driver.gateway';
 
 @Injectable()
 export class WalletService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    @Inject(forwardRef(() => DriverGateway))
+    private driverGateway: DriverGateway,
+  ) {}
 
   async getWallet(userId: string) {
     const wallet = await this.prisma.wallet.findUnique({
@@ -27,7 +32,7 @@ export class WalletService {
       throw new BadRequestException('Amount must be greater than zero');
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       // Update wallet balance
       const wallet = await tx.wallet.update({
         where: { userId },
@@ -53,6 +58,11 @@ export class WalletService {
 
       return wallet;
     });
+
+    // Emit WebSocket event for wallet update
+    await this.driverGateway.sendWalletUpdate(userId);
+
+    return result;
   }
 
   async debitBalance(
@@ -65,7 +75,7 @@ export class WalletService {
       throw new BadRequestException('Amount must be greater than zero');
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       // Get current wallet
       const currentWallet = await tx.wallet.findUnique({
         where: { userId },
@@ -105,6 +115,11 @@ export class WalletService {
 
       return wallet;
     });
+
+    // Emit WebSocket event for wallet update
+    await this.driverGateway.sendWalletUpdate(userId);
+
+    return result;
   }
 
   async holdBalance(userId: string, amount: number, referenceId: string) {

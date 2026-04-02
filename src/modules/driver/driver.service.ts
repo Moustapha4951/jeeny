@@ -1,12 +1,14 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../../redis/redis.service';
+import { DriverGateway } from './driver.gateway';
 
 @Injectable()
 export class DriverService {
   constructor(
     private prisma: PrismaService,
     private redis: RedisService,
+    private driverGateway: DriverGateway,
   ) {}
 
   async getProfile(userId: string) {
@@ -95,6 +97,9 @@ export class DriverService {
     } else {
       await this.redis.zRem('drivers:online', driver.id);
     }
+
+    // Emit WebSocket event
+    await this.driverGateway.sendDriverUpdate(userId);
 
     return { success: true, isOnline };
   }

@@ -40,16 +40,28 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
       }
 
       const payload = this.jwtService.verify(token);
-      const driverId = payload.sub;
+      const userId = payload.sub;
+
+      // Get driver ID from user ID
+      const driver = await this.prisma.driver.findUnique({
+        where: { userId },
+      });
+
+      if (!driver) {
+        console.log(`WebSocket connection rejected: Driver not found for user ${userId}`);
+        client.disconnect();
+        return;
+      }
 
       // Store driver socket mapping
-      this.driverSockets.set(driverId, client.id);
-      client.data.driverId = driverId;
+      this.driverSockets.set(driver.id, client.id);
+      client.data.driverId = driver.id;
+      client.data.userId = userId;
 
-      console.log(`✅ Driver ${driverId} connected via WebSocket`);
+      console.log(`✅ Driver ${driver.id} (user: ${userId}) connected via WebSocket`);
 
       // Send initial data
-      await this.sendDriverUpdate(driverId);
+      await this.sendDriverUpdate(driver.id);
     } catch (error) {
       console.error('WebSocket connection error:', error);
       client.disconnect();

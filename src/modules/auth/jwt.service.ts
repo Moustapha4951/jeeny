@@ -17,7 +17,7 @@ export interface TokenPair {
 
 @Injectable()
 export class JwtAuthService {
-  private readonly ACCESS_TOKEN_EXPIRY = '15m';
+  private readonly ACCESS_TOKEN_EXPIRY: string;
   private readonly REFRESH_TOKEN_EXPIRY = '7d';
 
   constructor(
@@ -25,7 +25,9 @@ export class JwtAuthService {
     private prisma: PrismaService,
     private redis: RedisService,
     private configService: ConfigService,
-  ) {}
+  ) {
+    this.ACCESS_TOKEN_EXPIRY = this.configService.get<string>('JWT_EXPIRY') || '30d';
+  }
 
   async generateTokens(
     userId: string,

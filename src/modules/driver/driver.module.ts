@@ -12,7 +12,7 @@ import { RedisModule } from '../../redis/redis.module';
     RedisModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET || 'your-secret-key',
-      signOptions: { expiresIn: '15m' },
+      signOptions: { expiresIn: process.env.JWT_EXPIRY || '30d' },
     }),
   ],
   controllers: [DriverController],

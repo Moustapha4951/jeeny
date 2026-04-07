@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../../redis/redis.service';
 import { DriverGateway } from './driver.gateway';
@@ -76,12 +76,74 @@ export class DriverService {
   async toggleAvailability(userId: string, isOnline: boolean) {
     const driver = await this.prisma.driver.findUnique({
       where: { userId },
+      include: {
+        user: {
+          include: {
+            wallet: true,
+          },
+        },
+      },
     });
 
     if (!driver) {
       throw new NotFoundException('Driver not found');
     }
 
+    // Check if driver is trying to go offline while on a trip
+    if (!isOnline && driver.isOnTrip) {
+      throw new BadRequestException('Cannot go offline while on a trip');
+    }
+
+    // If trying to go online, perform validation checks
+    if (isOnline) {
+      // 1. Check driver status - must be APPROVED
+      if (driver.status !== 'APPROVED') {
+        const statusMessages = {
+          PENDING: 'Your account is pending approval',
+          SUSPENDED: 'Your account has been suspended',
+          REJECTED: 'Your account has been rejected',
+          INACTIVE: 'Your account is inactive',
+        };
+        throw new BadRequestException(
+          statusMessages[driver.status] || 'Your account is not approved',
+        );
+      }
+
+      // 2. Check wallet balance against minimum requirement
+      const minBalanceSetting = await this.prisma.systemSetting.findUnique({
+        where: { key: 'driver_minimum_balance' },
+      });
+
+      const minimumBalance = minBalanceSetting 
+        ? Number(minBalanceSetting.value) 
+        : 0;
+
+      const wallet = driver.user.wallet;
+      if (!wallet || Number(wallet.balance) < minimumBalance) {
+        throw new BadRequestException(
+          `Insufficient balance. Minimum required: ${minimumBalance} MRU`,
+        );
+      }
+
+      // 3. Check if driver has completed required documents
+      const requiredDocs = await this.prisma.document.findMany({
+        where: {
+          userId,
+          type: {
+            in: ['LICENSE', 'NATIONAL_ID', 'VEHICLE_REG', 'INSURANCE'],
+          },
+        },
+      });
+
+      const approvedDocs = requiredDocs.filter(doc => doc.status === 'APPROVED');
+      if (approvedDocs.length < 4) {
+        throw new BadRequestException(
+          'Please complete and get approval for all required documents',
+        );
+      }
+    }
+
+    // Update driver online status
     await this.prisma.driver.update({
       where: { userId },
       data: { isOnline },

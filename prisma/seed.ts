@@ -243,6 +243,7 @@ async function main() {
     { key: 'SURGE_MULTIPLIER', value: '1.5', valueType: 'NUMBER', category: 'PRICING', descriptionAr: 'معامل الزيادة في أوقات الذروة' },
     { key: 'CANCELLATION_FEE', value: '50', valueType: 'NUMBER', category: 'PRICING', descriptionAr: 'رسوم الإلغاء' },
     { key: 'MAX_SEARCH_RADIUS', value: '10', valueType: 'NUMBER', category: 'GENERAL', descriptionAr: 'نطاق البحث الأقصى (كم)' },
+    { key: 'driver_minimum_balance', value: '500', valueType: 'NUMBER', category: 'DRIVER', descriptionAr: 'الحد الأدنى لرصيد السائق للعمل' },
   ];
 
   for (const setting of settings) {
@@ -268,7 +269,7 @@ async function main() {
   console.log(`   - 1 Vehicle type (Sedan)`);
   console.log(`   - Saved places for 3 users`);
   console.log(`   - 2 Active promo codes`);
-  console.log(`   - 8 System settings`);
+  console.log(`   - 9 System settings (including driver minimum balance: 500 MRU)`);
   console.log('');
   console.log('🔐 Test Login:');
   console.log('   Admin: +22212345678');

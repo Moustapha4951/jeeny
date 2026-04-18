@@ -155,6 +155,8 @@ export class MatchingService {
             driverId: driver.driverId,
             expiresAt,
             status: 'PENDING',
+            estimatedArrival: Math.ceil(driver.distance * 2), // Rough estimate: 2 min per km
+            distanceToPickup: driver.distance,
           },
         }),
       ),

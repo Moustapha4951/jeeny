@@ -76,26 +76,35 @@ export class MatchingService {
     }
 
     // Get driver details from database
-    const drivers = await this.prisma.user.findMany({
+    const drivers = await this.prisma.driver.findMany({
       where: {
-        id: { in: driverIds },
-        role: 'DRIVER',
+        userId: { in: driverIds },
         isOnline: true,
         status: 'APPROVED',
-        vehicle: {
-          vehicleTypeId,
-          status: 'APPROVED',
+        vehicles: {
+          some: {
+            typeId: vehicleTypeId,
+            status: 'APPROVED',
+            isActive: true,
+          },
         },
       },
       include: {
-        vehicle: true,
+        user: true,
+        vehicles: {
+          where: {
+            typeId: vehicleTypeId,
+            status: 'APPROVED',
+            isActive: true,
+          },
+        },
       },
     });
 
     // Get current locations from Redis
     const driversWithLocations = await Promise.all(
       drivers.map(async (driver) => {
-        const location = await this.redis.geoPos(this.DRIVER_LOCATION_KEY, driver.id);
+        const location = await this.redis.geoPos(this.DRIVER_LOCATION_KEY, driver.userId);
         return {
           ...driver,
           currentLocation: location
@@ -163,7 +172,11 @@ export class MatchingService {
     const ride = await this.prisma.ride.findUnique({
       where: { id: rideId },
       include: {
-        consumer: true,
+        consumer: {
+          include: {
+            user: true,
+          },
+        },
       },
     });
 
@@ -173,20 +186,26 @@ export class MatchingService {
 
     await Promise.all(
       rankedDrivers.map(async (driver) => {
-        const driverUser = await this.prisma.user.findUnique({
+        const driverRecord = await this.prisma.driver.findUnique({
           where: { id: driver.driverId },
+          include: {
+            user: true,
+          },
         });
 
-        if (driverUser?.fcmToken) {
+        if (driverRecord?.user?.fcmToken) {
           try {
             await this.firebase.sendNotification(
-              driverUser.fcmToken,
-              'New Ride Request',
-              `Pickup: ${ride.pickupAddress}`,
+              driverRecord.user.fcmToken,
+              'طلب رحلة جديد',
+              `نقطة الانطلاق: ${ride.pickupAddress}`,
               {
                 type: 'RIDE_OFFER',
                 rideId: ride.id,
                 distance: driver.distance.toFixed(2),
+                pickupAddress: ride.pickupAddress,
+                dropoffAddress: ride.dropoffAddress,
+                estimatedFare: ride.estimatedFare.toString(),
               },
             );
           } catch (error) {

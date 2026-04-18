@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { PrismaService } from '../../prisma/prisma.service';
 import { WalletService } from '../wallet/wallet.service';
 import { FirebaseService } from '../../firebase/firebase.service';
+import { MatchingService } from '../rides/matching.service';
 
 @Injectable()
 export class AdminService {
@@ -9,6 +10,7 @@ export class AdminService {
     private prisma: PrismaService,
     private walletService: WalletService,
     private firebaseService: FirebaseService,
+    private matchingService: MatchingService,
   ) {}
 
   async getDashboardStats() {
@@ -585,6 +587,14 @@ export class AdminService {
         paymentMethod: 'CASH',
       },
     });
+
+    // Find and notify nearby drivers
+    await this.matchingService.findAndNotifyDrivers(
+      ride.id,
+      pickupLat,
+      pickupLng,
+      selectedVehicleTypeId,
+    );
 
     return {
       success: true,

@@ -1070,6 +1070,14 @@ export class AdminService {
       },
     });
 
+    // If profile photo is approved, update user avatar
+    if (document.type === 'PROFILE_PHOTO') {
+      await this.prisma.user.update({
+        where: { id: document.userId },
+        data: { avatar: document.url },
+      });
+    }
+
     // Send FCM notification
     if (document.user.fcmToken) {
       const docTypeArabic = {

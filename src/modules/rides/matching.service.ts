@@ -27,6 +27,8 @@ export class MatchingService {
     pickupLng: number,
     vehicleTypeId: string,
   ): Promise<void> {
+    this.logger.log(`🔍 Finding drivers for ride ${rideId} at (${pickupLat}, ${pickupLng})`);
+    
     let radius = 2; // Start with 2km radius
     const maxRadius = 10; // Maximum 10km radius
     let drivers: any[] = [];
@@ -38,22 +40,26 @@ export class MatchingService {
       if (drivers.length === 0) {
         radius += 2; // Expand by 2km
         this.logger.log(`Expanding search radius to ${radius}km for ride ${rideId}`);
+      } else {
+        this.logger.log(`✅ Found ${drivers.length} drivers within ${radius}km`);
       }
     }
 
     if (drivers.length === 0) {
-      this.logger.warn(`No drivers found within ${maxRadius}km for ride ${rideId}`);
+      this.logger.warn(`❌ No drivers found within ${maxRadius}km for ride ${rideId}`);
       return;
     }
 
     // Rank drivers
     const rankedDrivers = this.rankDrivers(drivers, pickupLat, pickupLng);
+    this.logger.log(`📊 Ranked ${rankedDrivers.length} drivers`);
 
     // Create ride offers for top drivers
     await this.createRideOffers(rideId, rankedDrivers.slice(0, 5));
 
     // Send notifications to drivers
     await this.notifyDrivers(rideId, rankedDrivers.slice(0, 5));
+    this.logger.log(`📨 Sent notifications to ${Math.min(rankedDrivers.length, 5)} drivers`);
   }
 
   private async findNearbyDrivers(
@@ -62,6 +68,8 @@ export class MatchingService {
     radiusKm: number,
     vehicleTypeId: string,
   ): Promise<any[]> {
+    this.logger.log(`🔍 Searching for drivers within ${radiusKm}km of (${latitude}, ${longitude})`);
+    
     // Get nearby driver IDs from Redis
     const driverIds = await this.redis.geoRadius(
       this.DRIVER_LOCATION_KEY,
@@ -70,6 +78,8 @@ export class MatchingService {
       radiusKm,
       'km',
     );
+
+    this.logger.log(`📍 Found ${driverIds.length} driver IDs in Redis geospatial index`);
 
     if (driverIds.length === 0) {
       return [];
@@ -101,6 +111,8 @@ export class MatchingService {
       },
     });
 
+    this.logger.log(`✅ Found ${drivers.length} eligible drivers (online, approved, with matching vehicle)`);
+
     // Get current locations from Redis
     const driversWithLocations = await Promise.all(
       drivers.map(async (driver) => {
@@ -114,7 +126,10 @@ export class MatchingService {
       }),
     );
 
-    return driversWithLocations.filter((d) => d.currentLocation !== null);
+    const validDrivers = driversWithLocations.filter((d) => d.currentLocation !== null);
+    this.logger.log(`📍 ${validDrivers.length} drivers have valid locations`);
+    
+    return validDrivers;
   }
 
   private rankDrivers(drivers: any[], pickupLat: number, pickupLng: number): DriverScore[] {

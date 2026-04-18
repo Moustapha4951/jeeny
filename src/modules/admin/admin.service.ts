@@ -1038,5 +1038,77 @@ export class AdminService {
       balance: wallet?.balance,
     };
   }
+
+  async getDriverDocuments(driverId: string) {
+    const driver = await this.prisma.driver.findUnique({
+      where: { id: driverId },
+    });
+
+    if (!driver) {
+      throw new NotFoundException('Driver not found');
+    }
+
+    const documents = await this.prisma.document.findMany({
+      where: { userId: driver.userId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return { documents };
+  }
+
+  async approveDocument(documentId: string, adminId: string) {
+    const document = await this.prisma.document.update({
+      where: { id: documentId },
+      data: {
+        status: 'APPROVED',
+        rejectionReason: null,
+        reviewedById: adminId,
+        reviewedAt: new Date(),
+      },
+    });
+
+    // Check if all required documents are approved
+    const allDocs = await this.prisma.document.findMany({
+      where: { userId: document.userId },
+    });
+
+    const requiredTypes = ['LICENSE', 'NATIONAL_ID', 'VEHICLE_REG', 'INSURANCE'];
+    const approvedRequired = allDocs.filter(
+      doc => requiredTypes.includes(doc.type) && doc.status === 'APPROVED'
+    );
+
+    // If all 4 required documents are approved, approve the driver
+    if (approvedRequired.length === 4) {
+      await this.prisma.driver.update({
+        where: { userId: document.userId },
+        data: { status: 'APPROVED' },
+      });
+    }
+
+    return { success: true, document };
+  }
+
+  async rejectDocument(documentId: string, adminId: string, reason: string) {
+    const document = await this.prisma.document.update({
+      where: { id: documentId },
+      data: {
+        status: 'REJECTED',
+        rejectionReason: reason,
+        reviewedById: adminId,
+        reviewedAt: new Date(),
+      },
+    });
+
+    // If any required document is rejected, set driver status to PENDING
+    const requiredTypes = ['LICENSE', 'NATIONAL_ID', 'VEHICLE_REG', 'INSURANCE'];
+    if (requiredTypes.includes(document.type)) {
+      await this.prisma.driver.update({
+        where: { userId: document.userId },
+        data: { status: 'PENDING' },
+      });
+    }
+
+    return { success: true, document };
+  }
 }
 

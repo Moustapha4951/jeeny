@@ -348,9 +348,23 @@ export class DriverService {
       },
     });
 
+    // Prevent re-uploading approved documents
+    if (existingDoc && existingDoc.status === 'APPROVED') {
+      throw new BadRequestException(
+        'This document has already been approved and cannot be changed'
+      );
+    }
+
+    // Only allow re-upload if document is rejected or pending
+    if (existingDoc && existingDoc.status === 'PENDING') {
+      throw new BadRequestException(
+        'This document is currently under review. Please wait for admin decision.'
+      );
+    }
+
     let document;
     if (existingDoc) {
-      // Update existing document
+      // Update existing document (only if rejected)
       document = await this.prisma.document.update({
         where: { id: existingDoc.id },
         data: {

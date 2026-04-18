@@ -157,4 +157,25 @@ export class AdminController {
   ) {
     return this.adminService.debitDriverWallet(driverId, body.amount, body.description);
   }
+
+  // Get driver documents
+  @Get('drivers/:id/documents')
+  async getDriverDocuments(@Param('id') driverId: string) {
+    return this.adminService.getDriverDocuments(driverId);
+  }
+
+  // Approve document
+  @Post('documents/:id/approve')
+  async approveDocument(@Param('id') documentId: string, @Body() body: { adminId: string }) {
+    return this.adminService.approveDocument(documentId, body.adminId);
+  }
+
+  // Reject document
+  @Post('documents/:id/reject')
+  async rejectDocument(
+    @Param('id') documentId: string,
+    @Body() body: { adminId: string; reason: string },
+  ) {
+    return this.adminService.rejectDocument(documentId, body.adminId, body.reason);
+  }
 }

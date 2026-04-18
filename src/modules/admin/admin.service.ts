@@ -1062,8 +1062,8 @@ export class AdminService {
       data: {
         status: 'APPROVED',
         rejectionReason: null,
-        reviewedById: adminId,
         reviewedAt: new Date(),
+        // Don't set reviewedById if adminId is not valid
       },
       include: {
         user: true,
@@ -1135,8 +1135,8 @@ export class AdminService {
       data: {
         status: 'REJECTED',
         rejectionReason: reason,
-        reviewedById: adminId,
         reviewedAt: new Date(),
+        // Don't set reviewedById if adminId is not valid
       },
       include: {
         user: true,

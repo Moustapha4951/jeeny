@@ -13,6 +13,8 @@ import {
 import { Server, Socket } from 'socket.io';
 import { UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
+import { RedisService } from '../../redis/redis.service';
+import { PrismaService } from '../../prisma/prisma.service';
 
 interface AuthenticatedSocket extends Socket {
   userId: string;
@@ -27,6 +29,12 @@ export class WebsocketGateway
   implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
 {
   @WebSocketServer() server: Server;
+  private readonly DRIVER_LOCATION_KEY = 'driver:locations';
+
+  constructor(
+    private redis: RedisService,
+    private prisma: PrismaService,
+  ) {}
 
   afterInit(server: Server) {
     console.log('WebSocket Gateway Initialized');
@@ -80,6 +88,39 @@ export class WebsocketGateway
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() data: { lat: number; lng: number; heading?: number },
   ) {
+    // Store location in Redis geospatial index
+    try {
+      // Find driver by userId
+      const driver = await this.prisma.driver.findUnique({
+        where: { userId: client.userId },
+      });
+
+      if (driver && driver.isOnline) {
+        // Store in Redis for matching service
+        await this.redis.geoAdd(
+          this.DRIVER_LOCATION_KEY,
+          data.lng,
+          data.lat,
+          driver.userId,
+        );
+
+        // Update database
+        await this.prisma.driver.update({
+          where: { id: driver.id },
+          data: {
+            currentLat: data.lat,
+            currentLng: data.lng,
+            heading: data.heading,
+            lastLocationAt: new Date(),
+          },
+        });
+
+        console.log(`✅ Driver ${driver.userId} location updated: (${data.lat}, ${data.lng})`);
+      }
+    } catch (error) {
+      console.error('Error storing driver location:', error);
+    }
+
     // Broadcast to admin room
     this.server.to('admin').emit('driver_location_update', {
       driverId: client.userId,

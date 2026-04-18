@@ -1065,7 +1065,30 @@ export class AdminService {
         reviewedById: adminId,
         reviewedAt: new Date(),
       },
+      include: {
+        user: true,
+      },
     });
+
+    // Send FCM notification
+    if (document.user.fcmToken) {
+      const docTypeArabic = {
+        'LICENSE': 'رخصة القيادة',
+        'NATIONAL_ID': 'البطاقة الوطنية',
+        'VEHICLE_REG': 'استمارة المركبة',
+        'INSURANCE': 'تأمين المركبة',
+        'PROFILE_PHOTO': 'الصورة الشخصية',
+        'OTHER': 'صورة المركبة',
+        'CONTRACT': 'العقد',
+      };
+
+      await this.firebaseService.sendNotification(
+        document.user.fcmToken,
+        'تمت الموافقة على المستند ✓',
+        `تمت الموافقة على ${docTypeArabic[document.type] || document.type}`,
+        { type: 'DOCUMENT_APPROVED', documentId: document.id, documentType: document.type },
+      );
+    }
 
     // Check if all required documents are approved
     const allDocs = await this.prisma.document.findMany({
@@ -1083,6 +1106,16 @@ export class AdminService {
         where: { userId: document.userId },
         data: { status: 'APPROVED' },
       });
+
+      // Send congratulations notification
+      if (document.user.fcmToken) {
+        await this.firebaseService.sendNotification(
+          document.user.fcmToken,
+          'مبروك! تم قبولك كسائق 🎉',
+          'تمت الموافقة على جميع مستنداتك. يمكنك الآن البدء في العمل',
+          { type: 'DRIVER_APPROVED' },
+        );
+      }
     }
 
     return { success: true, document };
@@ -1097,7 +1130,30 @@ export class AdminService {
         reviewedById: adminId,
         reviewedAt: new Date(),
       },
+      include: {
+        user: true,
+      },
     });
+
+    // Send FCM notification
+    if (document.user.fcmToken) {
+      const docTypeArabic = {
+        'LICENSE': 'رخصة القيادة',
+        'NATIONAL_ID': 'البطاقة الوطنية',
+        'VEHICLE_REG': 'استمارة المركبة',
+        'INSURANCE': 'تأمين المركبة',
+        'PROFILE_PHOTO': 'الصورة الشخصية',
+        'OTHER': 'صورة المركبة',
+        'CONTRACT': 'العقد',
+      };
+
+      await this.firebaseService.sendNotification(
+        document.user.fcmToken,
+        'تم رفض المستند',
+        `تم رفض ${docTypeArabic[document.type] || document.type}. السبب: ${reason}`,
+        { type: 'DOCUMENT_REJECTED', documentId: document.id, documentType: document.type, reason },
+      );
+    }
 
     // If any required document is rejected, set driver status to PENDING
     const requiredTypes = ['LICENSE', 'NATIONAL_ID', 'VEHICLE_REG', 'INSURANCE'];

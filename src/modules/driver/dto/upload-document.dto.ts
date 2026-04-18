@@ -1,13 +1,13 @@
 import { IsString, IsEnum, IsNotEmpty, IsOptional, IsDateString } from 'class-validator';
 
 export enum DocumentType {
-  LICENSE = 'LICENSE',
-  NATIONAL_ID = 'NATIONAL_ID',
-  PROFILE_PHOTO = 'PROFILE_PHOTO',
-  VEHICLE_REG = 'VEHICLE_REG',
-  INSURANCE = 'INSURANCE',
-  VEHICLE_PHOTO = 'VEHICLE_PHOTO',
-  CONTRACT = 'CONTRACT',
+  LICENSE = 'license',
+  NATIONAL_ID = 'national_id',
+  PROFILE_PHOTO = 'profile_photo',
+  VEHICLE_REG = 'vehicle_reg',
+  INSURANCE = 'insurance',
+  VEHICLE_PHOTO = 'vehicle_photo',
+  CONTRACT = 'contract',
 }
 
 export class UploadDocumentDto {

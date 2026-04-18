@@ -80,6 +80,9 @@ export class MatchingService {
     );
 
     this.logger.log(`📍 Found ${driverIds.length} driver IDs in Redis geospatial index`);
+    if (driverIds.length > 0) {
+      this.logger.log(`   Driver IDs: ${driverIds.join(', ')}`);
+    }
 
     if (driverIds.length === 0) {
       return [];
@@ -112,6 +115,26 @@ export class MatchingService {
     });
 
     this.logger.log(`✅ Found ${drivers.length} eligible drivers (online, approved, with matching vehicle)`);
+    
+    // Debug: Check all drivers without filters
+    const allDrivers = await this.prisma.driver.findMany({
+      where: {
+        userId: { in: driverIds },
+      },
+      include: {
+        user: true,
+        vehicles: true,
+      },
+    });
+    
+    for (const driver of allDrivers) {
+      this.logger.log(`   Driver ${driver.userId}: online=${driver.isOnline}, status=${driver.status}, vehicles=${driver.vehicles.length}`);
+      if (driver.vehicles.length > 0) {
+        driver.vehicles.forEach(v => {
+          this.logger.log(`      Vehicle: typeId=${v.typeId}, status=${v.status}, isActive=${v.isActive}, requested=${vehicleTypeId}`);
+        });
+      }
+    }
 
     // Get current locations from Redis
     const driversWithLocations = await Promise.all(

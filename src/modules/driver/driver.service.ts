@@ -60,14 +60,15 @@ export class DriverService {
       },
     });
 
-    // Update location in Redis for real-time tracking
+    // Update location in Redis for real-time tracking (use same key as matching service)
     if (driver.isOnline) {
       await this.redis.geoAdd(
-        'drivers:online',
+        'driver:locations',
         longitude,
         latitude,
-        driver.id,
+        userId, // Use userId to match with matching service
       );
+      console.log(`✅ Driver ${userId} location stored in Redis: (${latitude}, ${longitude})`);
     }
 
     return { success: true };
@@ -149,16 +150,18 @@ export class DriverService {
       data: { isOnline },
     });
 
-    // Update Redis
+    // Update Redis (use same key as matching service)
     if (isOnline && driver.currentLat && driver.currentLng) {
       await this.redis.geoAdd(
-        'drivers:online',
+        'driver:locations',
         Number(driver.currentLng),
         Number(driver.currentLat),
-        driver.id,
+        userId, // Use userId to match with matching service
       );
+      console.log(`✅ Driver ${userId} added to Redis geospatial index`);
     } else {
-      await this.redis.zRem('drivers:online', driver.id);
+      await this.redis.zRem('driver:locations', userId);
+      console.log(`❌ Driver ${userId} removed from Redis geospatial index`);
     }
 
     // Emit WebSocket event

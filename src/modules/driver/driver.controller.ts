@@ -76,6 +76,31 @@ export class DriverController {
         
         console.log('Driver profile created:', driver.id);
 
+        // Create default Economy vehicle for the driver
+        const economyVehicleType = await this.prisma.vehicleType.findFirst({
+          where: { name: 'Economy' },
+        });
+
+        if (economyVehicleType) {
+          await this.prisma.vehicle.create({
+            data: {
+              driverId: driver.id,
+              typeId: economyVehicleType.id,
+              brand: 'Toyota',
+              model: 'Corolla',
+              year: 2020,
+              color: 'White',
+              colorAr: 'أبيض',
+              plateNumber: `TEMP-${driver.id.substring(0, 8)}`,
+              registrationNumber: `REG-${driver.id.substring(0, 8)}`,
+              registrationExpiry: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+              status: 'APPROVED', // Auto-approve for testing
+              isActive: true,
+            },
+          });
+          console.log('✅ Created default Economy vehicle for driver');
+        }
+
         // Check if any wallet exists for this user
         const existingWallet = await this.prisma.wallet.findFirst({
           where: {

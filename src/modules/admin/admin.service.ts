@@ -1184,5 +1184,89 @@ export class AdminService {
 
     return { success: true, document };
   }
+
+  async getDriverVehicles(driverId: string) {
+    const driver = await this.prisma.driver.findUnique({
+      where: { id: driverId },
+      include: {
+        vehicles: {
+          include: {
+            type: true,
+          },
+        },
+      },
+    });
+
+    if (!driver) {
+      throw new NotFoundException('Driver not found');
+    }
+
+    return { vehicles: driver.vehicles };
+  }
+
+  async approveVehicle(vehicleId: string, typeId: string) {
+    const vehicle = await this.prisma.vehicle.update({
+      where: { id: vehicleId },
+      data: {
+        status: 'APPROVED',
+        typeId: typeId,
+        isActive: true,
+        approvedAt: new Date(),
+      },
+      include: {
+        driver: {
+          include: {
+            user: true,
+          },
+        },
+        type: true,
+      },
+    });
+
+    // Send FCM notification
+    if (vehicle.driver.user.fcmToken) {
+      await this.firebaseService.sendNotification(
+        vehicle.driver.user.fcmToken,
+        'تم الموافقة على المركبة',
+        `تم الموافقة على مركبتك ${vehicle.brand} ${vehicle.model} كنوع ${vehicle.type?.nameAr || vehicle.type?.name}`,
+        { type: 'VEHICLE_APPROVED', vehicleId: vehicle.id },
+      );
+    }
+
+    console.log(`✅ Vehicle ${vehicleId} approved as ${vehicle.type?.name}`);
+
+    return { success: true, vehicle };
+  }
+
+  async rejectVehicle(vehicleId: string, reason: string) {
+    const vehicle = await this.prisma.vehicle.update({
+      where: { id: vehicleId },
+      data: {
+        status: 'REJECTED',
+        isActive: false,
+      },
+      include: {
+        driver: {
+          include: {
+            user: true,
+          },
+        },
+      },
+    });
+
+    // Send FCM notification
+    if (vehicle.driver.user.fcmToken) {
+      await this.firebaseService.sendNotification(
+        vehicle.driver.user.fcmToken,
+        'تم رفض المركبة',
+        `تم رفض مركبتك ${vehicle.brand} ${vehicle.model}. السبب: ${reason}`,
+        { type: 'VEHICLE_REJECTED', vehicleId: vehicle.id, reason },
+      );
+    }
+
+    console.log(`❌ Vehicle ${vehicleId} rejected: ${reason}`);
+
+    return { success: true, vehicle };
+  }
 }
 

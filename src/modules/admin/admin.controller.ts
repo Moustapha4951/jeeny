@@ -178,4 +178,28 @@ export class AdminController {
   ) {
     return this.adminService.rejectDocument(documentId, body.adminId, body.reason);
   }
+
+  // Get driver vehicles
+  @Get('drivers/:id/vehicles')
+  async getDriverVehicles(@Param('id') driverId: string) {
+    return this.adminService.getDriverVehicles(driverId);
+  }
+
+  // Approve vehicle and assign type
+  @Post('vehicles/:id/approve')
+  async approveVehicle(
+    @Param('id') vehicleId: string,
+    @Body() body: { typeId: string },
+  ) {
+    return this.adminService.approveVehicle(vehicleId, body.typeId);
+  }
+
+  // Reject vehicle
+  @Post('vehicles/:id/reject')
+  async rejectVehicle(
+    @Param('id') vehicleId: string,
+    @Body() body: { reason: string },
+  ) {
+    return this.adminService.rejectVehicle(vehicleId, body.reason);
+  }
 }

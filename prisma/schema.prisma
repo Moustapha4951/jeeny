@@ -788,7 +788,7 @@ model VehicleType {
 model Vehicle {
   id                  String          @id @default(uuid())
   driverId            String
-  typeId              String
+  typeId              String?
   brand               String
   model               String
   year                Int
@@ -821,9 +821,9 @@ model Vehicle {
   createdAt           DateTime        @default(now())
   updatedAt           DateTime        @updatedAt
 
-  driver     Driver       @relation(fields: [driverId], references: [id], onDelete: Cascade)
-  type       VehicleType  @relation(fields: [typeId], references: [id])
-  approvedBy Admin?       @relation(fields: [approvedById], references: [id])
+  driver     Driver        @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  type       VehicleType?  @relation(fields: [typeId], references: [id])
+  approvedBy Admin?        @relation(fields: [approvedById], references: [id])
 
   rides          Ride[]
   intercityTrips IntercityTrip[]

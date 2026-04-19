@@ -461,4 +461,69 @@ export class DriverService {
 
     return { documents };
   }
+
+  async registerVehicle(
+    userId: string,
+    vehicleData: {
+      brand: string;
+      model: string;
+      year: number;
+      color: string;
+      colorAr: string;
+      plateNumber: string;
+      registrationNumber: string;
+      registrationExpiry: string;
+    },
+  ) {
+    const driver = await this.prisma.driver.findUnique({
+      where: { userId },
+    });
+
+    if (!driver) {
+      throw new NotFoundException('Driver not found');
+    }
+
+    // Check if driver already has a vehicle
+    const existingVehicle = await this.prisma.vehicle.findFirst({
+      where: { driverId: driver.id },
+    });
+
+    if (existingVehicle) {
+      throw new BadRequestException('Driver already has a registered vehicle');
+    }
+
+    // Create vehicle with PENDING status (admin will assign type and approve)
+    const vehicle = await this.prisma.vehicle.create({
+      data: {
+        driverId: driver.id,
+        typeId: null, // Admin will assign this based on vehicle info
+        brand: vehicleData.brand,
+        model: vehicleData.model,
+        year: vehicleData.year,
+        color: vehicleData.color,
+        colorAr: vehicleData.colorAr,
+        plateNumber: vehicleData.plateNumber,
+        registrationNumber: vehicleData.registrationNumber,
+        registrationExpiry: new Date(vehicleData.registrationExpiry),
+        status: 'PENDING', // Requires admin approval
+        isActive: false,
+      },
+    });
+
+    console.log(`✅ Vehicle registered for driver ${driver.id}, awaiting admin approval`);
+
+    return {
+      success: true,
+      message: 'Vehicle registered successfully. Awaiting admin approval.',
+      vehicle: {
+        id: vehicle.id,
+        brand: vehicle.brand,
+        model: vehicle.model,
+        year: vehicle.year,
+        color: vehicle.color,
+        plateNumber: vehicle.plateNumber,
+        status: vehicle.status,
+      },
+    };
+  }
 }

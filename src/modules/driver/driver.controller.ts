@@ -213,4 +213,21 @@ export class DriverController {
   async getDocuments(@Request() req: any) {
     return this.driverService.getDocuments(req.user.id);
   }
+
+  @Post('vehicle/register')
+  async registerVehicle(
+    @Request() req: any,
+    @Body() body: {
+      brand: string;
+      model: string;
+      year: number;
+      color: string;
+      colorAr: string;
+      plateNumber: string;
+      registrationNumber: string;
+      registrationExpiry: string;
+    },
+  ) {
+    return this.driverService.registerVehicle(req.user.id, body);
+  }
 }

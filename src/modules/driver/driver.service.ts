@@ -496,7 +496,7 @@ export class DriverService {
     const vehicle = await this.prisma.vehicle.create({
       data: {
         driverId: driver.id,
-        typeId: null, // Admin will assign this based on vehicle info
+        // typeId is undefined - Admin will assign this based on vehicle info
         brand: vehicleData.brand,
         model: vehicleData.model,
         year: vehicleData.year,

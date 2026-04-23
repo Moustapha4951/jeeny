@@ -128,30 +128,17 @@ export class JwtAuthService {
   }
 
   async logout(sessionId: string): Promise<void> {
-    // Delete session from database
+    // Delete session from database (refresh token is stored in the session)
     await this.prisma.session.delete({
       where: { id: sessionId },
     });
-
-    // Delete refresh token from Redis
-    await this.redis.del(`refresh:${sessionId}`);
   }
 
   async logoutAllSessions(userId: string): Promise<void> {
-    // Get all user sessions
-    const sessions = await this.prisma.session.findMany({
-      where: { userId },
-    });
-
-    // Delete all sessions
+    // Delete all sessions (refresh tokens are stored in sessions)
     await this.prisma.session.deleteMany({
       where: { userId },
     });
-
-    // Delete all refresh tokens from Redis
-    await Promise.all(
-      sessions.map((session) => this.redis.del(`refresh:${session.id}`)),
-    );
   }
 
   async getUserSessions(userId: string) {

@@ -190,6 +190,11 @@ export class DriverController {
     return this.driverService.rejectRide(req.user.id, rideId, body.reason);
   }
 
+  @Post('rides/:rideId/arrived')
+  async arrivedAtPickup(@Request() req: any, @Param('rideId') rideId: string) {
+    return this.driverService.arrivedAtPickup(req.user.id, rideId);
+  }
+
   @Get('earnings')
   async getEarnings(
     @Request() req: any,

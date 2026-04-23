@@ -232,6 +232,37 @@ export class DriverService {
     return { success: true };
   }
 
+  async arrivedAtPickup(userId: string, rideId: string) {
+    const driver = await this.prisma.driver.findUnique({
+      where: { userId },
+    });
+
+    if (!driver) {
+      throw new NotFoundException('Driver not found');
+    }
+
+    // Update ride status to DRIVER_ARRIVED
+    const ride = await this.prisma.ride.update({
+      where: { id: rideId },
+      data: {
+        status: 'DRIVER_ARRIVED',
+        arrivedAt: new Date(),
+      },
+      include: {
+        consumer: {
+          include: {
+            user: true,
+          },
+        },
+      },
+    });
+
+    // TODO: Send FCM notification to consumer that driver has arrived
+    console.log(`✅ Driver ${driver.id} arrived at pickup for ride ${rideId}`);
+
+    return { success: true, ride };
+  }
+
   async getEarnings(userId: string, period?: string) {
     const driver = await this.prisma.driver.findUnique({
       where: { userId },

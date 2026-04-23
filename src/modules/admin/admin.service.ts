@@ -588,13 +588,15 @@ export class AdminService {
       },
     });
 
-    // Find and notify nearby drivers
-    await this.matchingService.findAndNotifyDrivers(
+    // Find and notify nearby drivers (don't wait for completion)
+    this.matchingService.findAndNotifyDrivers(
       ride.id,
       pickupLat,
       pickupLng,
       selectedVehicleTypeId,
-    );
+    ).catch((error) => {
+      console.error('Error finding and notifying drivers:', error);
+    });
 
     return {
       success: true,

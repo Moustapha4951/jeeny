@@ -233,6 +233,10 @@ export class MatchingService {
                 distance: driver.distance.toFixed(2),
                 pickupAddress: ride.pickupAddress,
                 dropoffAddress: ride.dropoffAddress,
+                pickupLat: ride.pickupLat.toString(),
+                pickupLng: ride.pickupLng.toString(),
+                dropoffLat: ride.dropoffLat.toString(),
+                dropoffLng: ride.dropoffLng.toString(),
                 estimatedFare: ride.estimatedFare.toString(),
               },
             );

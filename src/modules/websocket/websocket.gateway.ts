@@ -13,7 +13,6 @@ import {
 import { Server, Socket } from 'socket.io';
 import { UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
-import { RedisService } from '../../redis/redis.service';
 import { PrismaService } from '../../prisma/prisma.service';
 
 interface AuthenticatedSocket extends Socket {
@@ -29,10 +28,8 @@ export class WebsocketGateway
   implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
 {
   @WebSocketServer() server: Server;
-  private readonly DRIVER_LOCATION_KEY = 'driver:locations';
 
   constructor(
-    private redis: RedisService,
     private prisma: PrismaService,
   ) {}
 
@@ -88,7 +85,7 @@ export class WebsocketGateway
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() data: { lat: number; lng: number; heading?: number },
   ) {
-    // Store location in Redis geospatial index
+    // Store location in database (no Redis needed)
     try {
       // Find driver by userId
       const driver = await this.prisma.driver.findUnique({
@@ -96,15 +93,7 @@ export class WebsocketGateway
       });
 
       if (driver && driver.isOnline) {
-        // Store in Redis for matching service
-        await this.redis.geoAdd(
-          this.DRIVER_LOCATION_KEY,
-          data.lng,
-          data.lat,
-          driver.userId,
-        );
-
-        // Update database
+        // Update database only
         await this.prisma.driver.update({
           where: { id: driver.id },
           data: {

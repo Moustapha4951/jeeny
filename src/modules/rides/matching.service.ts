@@ -192,12 +192,8 @@ export class MatchingService {
       ),
     );
 
-    // Store offer expiry in Redis for background job
-    await this.redis.set(
-      `ride:offer:${rideId}`,
-      JSON.stringify({ rideId, expiresAt: expiresAt.toISOString() }),
-      this.OFFER_EXPIRY,
-    );
+    // Note: Offer expiry tracking removed (was using Redis)
+    // Can be implemented in PostgreSQL if needed in the future
   }
 
   private async notifyDrivers(rideId: string, rankedDrivers: DriverScore[]): Promise<void> {

@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Body,
+  Param,
   UseGuards,
   Request,
 } from '@nestjs/common';
@@ -176,16 +177,17 @@ export class DriverController {
   }
 
   @Post('rides/:rideId/accept')
-  async acceptRide(@Request() req: any, @Body() body: { rideId: string }) {
-    return this.driverService.acceptRide(req.user.id, body.rideId);
+  async acceptRide(@Request() req: any, @Param('rideId') rideId: string) {
+    return this.driverService.acceptRide(req.user.id, rideId);
   }
 
   @Post('rides/:rideId/reject')
   async rejectRide(
     @Request() req: any,
-    @Body() body: { rideId: string; reason: string },
+    @Param('rideId') rideId: string,
+    @Body() body: { reason: string },
   ) {
-    return this.driverService.rejectRide(req.user.id, body.rideId, body.reason);
+    return this.driverService.rejectRide(req.user.id, rideId, body.reason);
   }
 
   @Get('earnings')

@@ -1,14 +1,14 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { RedisService } from '../../redis/redis.service';
 import { DriverGateway } from './driver.gateway';
 import { UploadDocumentDto, DocumentType } from './dto/upload-document.dto';
+import { LocationService } from './location.service';
 
 @Injectable()
 export class DriverService {
   constructor(
     private prisma: PrismaService,
-    private redis: RedisService,
+    private locationService: LocationService,
     private driverGateway: DriverGateway,
   ) {}
 
@@ -50,26 +50,10 @@ export class DriverService {
       throw new NotFoundException('Driver not found');
     }
 
-    // Update location in database
-    await this.prisma.driver.update({
-      where: { userId },
-      data: {
-        currentLat: latitude,
-        currentLng: longitude,
-        lastLocationAt: new Date(),
-      },
-    });
-
-    // Update location in Redis for real-time tracking (use same key as matching service)
-    if (driver.isOnline) {
-      await this.redis.geoAdd(
-        'driver:locations',
-        longitude,
-        latitude,
-        userId, // Use userId to match with matching service
-      );
-      console.log(`✅ Driver ${userId} location stored in Redis: (${latitude}, ${longitude})`);
-    }
+    // Update location in database (no Redis needed)
+    await this.locationService.updateDriverLocation(userId, latitude, longitude);
+    
+    console.log(`✅ Driver ${userId} location updated: (${latitude}, ${longitude})`);
 
     return { success: true };
   }
@@ -150,18 +134,11 @@ export class DriverService {
       data: { isOnline },
     });
 
-    // Update Redis (use same key as matching service)
-    if (isOnline && driver.currentLat && driver.currentLng) {
-      await this.redis.geoAdd(
-        'driver:locations',
-        Number(driver.currentLng),
-        Number(driver.currentLat),
-        userId, // Use userId to match with matching service
-      );
-      console.log(`✅ Driver ${userId} added to Redis geospatial index`);
+    // No Redis needed - location is stored in PostgreSQL
+    if (isOnline) {
+      console.log(`✅ Driver ${userId} is now online`);
     } else {
-      await this.redis.zRem('driver:locations', userId);
-      console.log(`❌ Driver ${userId} removed from Redis geospatial index`);
+      console.log(`❌ Driver ${userId} is now offline`);
     }
 
     // Emit WebSocket event

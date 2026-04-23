@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { RedisService } from '../../redis/redis.service';
+import { LocationService } from '../driver/location.service';
 import { FirebaseService } from '../../firebase/firebase.service';
 
 interface DriverScore {
@@ -12,12 +12,11 @@ interface DriverScore {
 @Injectable()
 export class MatchingService {
   private readonly logger = new Logger(MatchingService.name);
-  private readonly DRIVER_LOCATION_KEY = 'driver:locations';
   private readonly OFFER_EXPIRY = 30; // 30 seconds
 
   constructor(
     private prisma: PrismaService,
-    private redis: RedisService,
+    private locationService: LocationService,
     private firebase: FirebaseService,
   ) {}
 
@@ -70,16 +69,14 @@ export class MatchingService {
   ): Promise<any[]> {
     this.logger.log(`🔍 Searching for drivers within ${radiusKm}km of (${latitude}, ${longitude})`);
     
-    // Get nearby driver IDs from Redis
-    const driverIds = await this.redis.geoRadius(
-      this.DRIVER_LOCATION_KEY,
-      longitude,
+    // Get nearby driver IDs from PostgreSQL (no Redis needed!)
+    const driverIds = await this.locationService.findNearbyDrivers(
       latitude,
+      longitude,
       radiusKm,
-      'km',
     );
 
-    this.logger.log(`📍 Found ${driverIds.length} driver IDs in Redis geospatial index`);
+    this.logger.log(`📍 Found ${driverIds.length} driver IDs in database`);
     if (driverIds.length > 0) {
       this.logger.log(`   Driver IDs: ${driverIds.join(', ')}`);
     }
@@ -136,18 +133,13 @@ export class MatchingService {
       }
     }
 
-    // Get current locations from Redis
-    const driversWithLocations = await Promise.all(
-      drivers.map(async (driver) => {
-        const location = await this.redis.geoPos(this.DRIVER_LOCATION_KEY, driver.userId);
-        return {
-          ...driver,
-          currentLocation: location
-            ? { latitude: location[1], longitude: location[0] }
-            : null,
-        };
-      }),
-    );
+    // Locations are already in the database, no need to fetch from Redis
+    const driversWithLocations = drivers.map((driver) => ({
+      ...driver,
+      currentLocation: driver.currentLat && driver.currentLng
+        ? { latitude: Number(driver.currentLat), longitude: Number(driver.currentLng) }
+        : null,
+    }));
 
     const validDrivers = driversWithLocations.filter((d) => d.currentLocation !== null);
     this.logger.log(`📍 ${validDrivers.length} drivers have valid locations`);

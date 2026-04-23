@@ -56,6 +56,24 @@ export class FirebaseService implements OnModuleInit {
           body,
         },
         data,
+        android: {
+          priority: 'high',
+          notification: {
+            channelId: 'jeeny_driver_channel',
+            priority: 'high',
+            sound: 'default',
+            defaultSound: true,
+            defaultVibrateTimings: true,
+          },
+        },
+        apns: {
+          payload: {
+            aps: {
+              sound: 'default',
+              badge: 1,
+            },
+          },
+        },
       };
 
       const response = await this.getMessaging().send(message);

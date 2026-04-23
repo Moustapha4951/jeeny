@@ -591,13 +591,14 @@ model OTP {
 }
 
 model Session {
-  id         String     @id @default(uuid())
-  userId     String
-  token      String     @unique
-  deviceId   String?
-  deviceType DeviceType?
-  deviceInfo Json?
-  ipAddress  String?
+  id           String     @id @default(uuid())
+  userId       String
+  token        String     @unique
+  refreshToken String?
+  deviceId     String?
+  deviceType   DeviceType?
+  deviceInfo   Json?
+  ipAddress    String?
   isActive   Boolean    @default(true)
   expiresAt  DateTime
   createdAt  DateTime   @default(now())

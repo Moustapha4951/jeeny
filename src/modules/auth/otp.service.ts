@@ -1,19 +1,16 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { RedisService } from '../../redis/redis.service';
 import { FirebaseService } from '../../firebase/firebase.service';
 
 @Injectable()
 export class OtpService {
   private readonly logger = new Logger(OtpService.name);
-  private readonly OTP_EXPIRY = 300; // 5 minutes in seconds
+  private readonly OTP_EXPIRY_MINUTES = 5;
   private readonly MAX_ATTEMPTS = 3;
-  private readonly RATE_LIMIT_WINDOW = 3600; // 1 hour in seconds
   private readonly MAX_REQUESTS_PER_HOUR = 5;
 
   constructor(
     private prisma: PrismaService,
-    private redis: RedisService,
     private firebase: FirebaseService,
   ) {}
 
@@ -22,30 +19,45 @@ export class OtpService {
   }
 
   async sendOTP(phoneNumber: string): Promise<void> {
-    // Check rate limiting
-    const rateLimitKey = `otp:ratelimit:${phoneNumber}`;
-    const requestCount = await this.redis.get(rateLimitKey);
+    // Check rate limiting - count OTPs sent in the last hour
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    const recentOTPs = await this.prisma.oTP.count({
+      where: {
+        phone: phoneNumber,
+        createdAt: { gte: oneHourAgo },
+      },
+    });
     
-    if (requestCount && parseInt(requestCount) >= this.MAX_REQUESTS_PER_HOUR) {
+    if (recentOTPs >= this.MAX_REQUESTS_PER_HOUR) {
       throw new BadRequestException('Too many OTP requests. Please try again later.');
     }
 
     // Generate OTP
     const otp = this.generateOTP();
-    const otpKey = `otp:${phoneNumber}`;
-    const attemptsKey = `otp:attempts:${phoneNumber}`;
+    const expiresAt = new Date(Date.now() + this.OTP_EXPIRY_MINUTES * 60 * 1000);
 
-    // Store OTP in Redis with expiry
-    await this.redis.set(otpKey, otp, this.OTP_EXPIRY);
-    await this.redis.set(attemptsKey, '0', this.OTP_EXPIRY);
+    // Delete any existing unused OTPs for this phone
+    await this.prisma.oTP.deleteMany({
+      where: {
+        phone: phoneNumber,
+        usedAt: null,
+      },
+    });
 
-    // Increment rate limit counter
-    const currentCount = requestCount ? parseInt(requestCount) : 0;
-    await this.redis.set(rateLimitKey, (currentCount + 1).toString(), this.RATE_LIMIT_WINDOW);
+    // Store OTP in database
+    await this.prisma.oTP.create({
+      data: {
+        phone: phoneNumber,
+        code: otp,
+        type: 'LOGIN',
+        attempts: 0,
+        expiresAt,
+      },
+    });
 
     // Send OTP via SMS (using Firebase or SMS gateway)
     try {
-      // For development: Log OTP to console AND return it
+      // For development: Log OTP to console
       this.logger.warn(`🔐 OTP for ${phoneNumber}: ${otp} (DEV MODE - Remove in production!)`);
       
       // TODO: Integrate with SMS gateway for production
@@ -57,47 +69,72 @@ export class OtpService {
   }
 
   async getOTPForDev(phoneNumber: string): Promise<string | null> {
-    // DEV ONLY: Get OTP from Redis for testing
-    const otpKey = `otp:${phoneNumber}`;
-    return await this.redis.get(otpKey);
+    // DEV ONLY: Get OTP from database for testing
+    const otpRecord = await this.prisma.oTP.findFirst({
+      where: {
+        phone: phoneNumber,
+        usedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    
+    return otpRecord?.code || null;
   }
 
   async verifyOTP(phoneNumber: string, otp: string): Promise<boolean> {
-    const otpKey = `otp:${phoneNumber}`;
-    const attemptsKey = `otp:attempts:${phoneNumber}`;
+    // Find the most recent unused OTP for this phone
+    const otpRecord = await this.prisma.oTP.findFirst({
+      where: {
+        phone: phoneNumber,
+        usedAt: null,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
 
-    // Check if OTP exists
-    const storedOTP = await this.redis.get(otpKey);
-    if (!storedOTP) {
+    if (!otpRecord) {
       throw new BadRequestException('OTP expired or not found. Please request a new one.');
     }
 
-    // Check attempts
-    const attempts = await this.redis.get(attemptsKey);
-    const attemptCount = attempts ? parseInt(attempts) : 0;
+    // Check if OTP is expired
+    if (otpRecord.expiresAt < new Date()) {
+      await this.prisma.oTP.delete({ where: { id: otpRecord.id } });
+      throw new BadRequestException('OTP expired. Please request a new one.');
+    }
 
-    if (attemptCount >= this.MAX_ATTEMPTS) {
-      await this.redis.del(otpKey);
-      await this.redis.del(attemptsKey);
+    // Check attempts
+    if (otpRecord.attempts >= this.MAX_ATTEMPTS) {
+      await this.prisma.oTP.delete({ where: { id: otpRecord.id } });
       throw new BadRequestException('Maximum verification attempts exceeded. Please request a new OTP.');
     }
 
     // Verify OTP
-    if (storedOTP !== otp) {
-      await this.redis.set(attemptsKey, (attemptCount + 1).toString(), this.OTP_EXPIRY);
+    if (otpRecord.code !== otp) {
+      await this.prisma.oTP.update({
+        where: { id: otpRecord.id },
+        data: { attempts: otpRecord.attempts + 1 },
+      });
       throw new BadRequestException('Invalid OTP. Please try again.');
     }
 
-    // OTP is valid, clean up
-    await this.redis.del(otpKey);
-    await this.redis.del(attemptsKey);
+    // OTP is valid, mark as used
+    await this.prisma.oTP.update({
+      where: { id: otpRecord.id },
+      data: { usedAt: new Date() },
+    });
 
     return true;
   }
 
   async cleanupExpiredOTPs(): Promise<void> {
-    // This will be called by a scheduled job
-    // Redis TTL handles automatic cleanup, but we can add additional logic here if needed
-    this.logger.log('OTP cleanup job executed');
+    // Delete OTPs older than 24 hours
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const deleted = await this.prisma.oTP.deleteMany({
+      where: {
+        createdAt: { lt: oneDayAgo },
+      },
+    });
+    
+    this.logger.log(`OTP cleanup: Deleted ${deleted.count} expired OTPs`);
   }
 }

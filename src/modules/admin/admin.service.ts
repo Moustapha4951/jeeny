@@ -515,10 +515,18 @@ export class AdminService {
     // Get default vehicle type if not provided
     let selectedVehicleTypeId = vehicleTypeId;
     if (!selectedVehicleTypeId) {
-      const defaultVehicleType = await this.prisma.vehicleType.findFirst({
-        where: { isActive: true },
-        orderBy: { basePrice: 'asc' },
+      // Prioritize economy if it exists
+      let defaultVehicleType = await this.prisma.vehicleType.findUnique({
+        where: { id: 'economy' }
       });
+      
+      // Fallback to cheapest if economy doesn't exist
+      if (!defaultVehicleType || !defaultVehicleType.isActive) {
+        defaultVehicleType = await this.prisma.vehicleType.findFirst({
+          where: { isActive: true },
+          orderBy: { basePrice: 'asc' },
+        });
+      }
       selectedVehicleTypeId = defaultVehicleType?.id;
     }
 

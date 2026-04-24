@@ -263,6 +263,128 @@ export class DriverService {
     return { success: true, ride };
   }
 
+  async startRide(userId: string, rideId: string) {
+    const driver = await this.prisma.driver.findUnique({
+      where: { userId },
+    });
+
+    if (!driver) {
+      throw new NotFoundException('Driver not found');
+    }
+
+    const ride = await this.prisma.ride.update({
+      where: { id: rideId },
+      data: {
+        status: 'IN_PROGRESS',
+        startedAt: new Date(),
+      },
+      include: {
+        consumer: {
+          include: { user: true },
+        },
+      },
+    });
+
+    // Mark driver as on trip
+    await this.prisma.driver.update({
+      where: { userId },
+      data: { isOnTrip: true },
+    });
+
+    console.log(`🚗 Ride ${rideId} started by driver ${driver.id}`);
+
+    return { success: true, ride };
+  }
+
+  async completeRide(userId: string, rideId: string) {
+    const driver = await this.prisma.driver.findUnique({
+      where: { userId },
+      include: { user: { include: { wallet: true } } },
+    });
+
+    if (!driver) {
+      throw new NotFoundException('Driver not found');
+    }
+
+    const ride = await this.prisma.ride.findUnique({
+      where: { id: rideId },
+    });
+
+    if (!ride) {
+      throw new NotFoundException('Ride not found');
+    }
+
+    const finalFare = Number(ride.estimatedFare || 0);
+
+    // Update ride to COMPLETED
+    const updatedRide = await this.prisma.ride.update({
+      where: { id: rideId },
+      data: {
+        status: 'COMPLETED',
+        completedAt: new Date(),
+        finalFare: finalFare,
+      },
+      include: {
+        consumer: {
+          include: { user: true },
+        },
+      },
+    });
+
+    // Mark driver as no longer on trip
+    await this.prisma.driver.update({
+      where: { userId },
+      data: { isOnTrip: false, totalRides: { increment: 1 } },
+    });
+
+    // Credit driver wallet (85% of fare after 15% platform commission)
+    const platformFeePercent = 15;
+    const driverShare = finalFare * ((100 - platformFeePercent) / 100);
+
+    if (driver.user.wallet && driverShare > 0) {
+      await this.prisma.wallet.update({
+        where: { id: driver.user.wallet.id },
+        data: { balance: { increment: driverShare } },
+      });
+      console.log(`💰 Credited ${driverShare} MRU to driver ${driver.id} wallet`);
+    }
+
+    // Emit WebSocket update to driver
+    await this.driverGateway.sendDriverUpdate(userId);
+
+    console.log(`✅ Ride ${rideId} completed by driver ${driver.id}`);
+
+    return { success: true, ride: updatedRide, driverShare };
+  }
+
+  async cancelRideByDriver(userId: string, rideId: string, reason: string) {
+    const driver = await this.prisma.driver.findUnique({
+      where: { userId },
+    });
+
+    if (!driver) {
+      throw new NotFoundException('Driver not found');
+    }
+
+    const ride = await this.prisma.ride.update({
+      where: { id: rideId },
+      data: {
+        status: 'CANCELLED_BY_DRIVER',
+        cancellationReason: reason,
+      },
+    });
+
+    // Mark driver as no longer on trip
+    await this.prisma.driver.update({
+      where: { userId },
+      data: { isOnTrip: false },
+    });
+
+    console.log(`❌ Ride ${rideId} cancelled by driver ${driver.id}: ${reason}`);
+
+    return { success: true, ride };
+  }
+
   async getEarnings(userId: string, period?: string) {
     const driver = await this.prisma.driver.findUnique({
       where: { userId },

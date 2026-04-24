@@ -195,6 +195,25 @@ export class DriverController {
     return this.driverService.arrivedAtPickup(req.user.id, rideId);
   }
 
+  @Post('rides/:rideId/start')
+  async startRide(@Request() req: any, @Param('rideId') rideId: string) {
+    return this.driverService.startRide(req.user.id, rideId);
+  }
+
+  @Post('rides/:rideId/complete')
+  async completeRide(@Request() req: any, @Param('rideId') rideId: string) {
+    return this.driverService.completeRide(req.user.id, rideId);
+  }
+
+  @Post('rides/:rideId/cancel')
+  async cancelRide(
+    @Request() req: any,
+    @Param('rideId') rideId: string,
+    @Body() body: { reason: string },
+  ) {
+    return this.driverService.cancelRideByDriver(req.user.id, rideId, body.reason || 'تم الإلغاء من قِبل السائق');
+  }
+
   @Get('earnings')
   async getEarnings(
     @Request() req: any,

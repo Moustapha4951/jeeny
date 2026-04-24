@@ -334,7 +334,7 @@ export class DriverService {
     // Mark driver as no longer on trip
     await this.prisma.driver.update({
       where: { userId },
-      data: { isOnTrip: false, totalRides: { increment: 1 } },
+      data: { isOnTrip: false, totalTrips: { increment: 1 } },
     });
 
     // Credit driver wallet (85% of fare after 15% platform commission)
@@ -370,7 +370,7 @@ export class DriverService {
       where: { id: rideId },
       data: {
         status: 'CANCELLED_BY_DRIVER',
-        cancellationReason: reason,
+        cancelReason: reason,
       },
     });
 

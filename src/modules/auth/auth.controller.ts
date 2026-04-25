@@ -189,12 +189,9 @@ export class AuthController {
       return { success: false, message: 'البريد الإلكتروني أو كلمة المرور غير صحيحة' };
     }
 
-    // Check password (stored as bcrypt hash in user.avatar field for v1,
-    // or check a dedicated passwordHash field if it exists)
-    // For simplicity in v1: we store the password as plaintext in a special field
-    // In production: use bcrypt. Here we check against user.lastName as password placeholder
-    // REAL implementation: compare against a passwordHash field on User
-    const storedPassword = (user as any).passwordHash;
+    // Check password — for employer accounts (v1), password is stored in fcmToken field
+    // (employer users don't receive push notifications so this field is repurposed)
+    const storedPassword = user.fcmToken;
     if (!storedPassword || storedPassword !== password) {
       return { success: false, message: 'البريد الإلكتروني أو كلمة المرور غير صحيحة' };
     }
@@ -204,13 +201,8 @@ export class AuthController {
       return { success: false, message: 'هذا الحساب غير مرتبط بشركة' };
     }
 
-    // Update FCM token if provided
-    if (fcmToken) {
-      await this.prisma.user.update({
-        where: { id: user.id },
-        data: { fcmToken },
-      });
-    }
+    // Note: fcmToken is repurposed as password storage for employer users in v1
+    // Do NOT update fcmToken here as it would overwrite the stored password
 
     // Generate tokens
     const tokens = await this.jwtAuthService.generateTokens(user.id, 'CONSUMER', undefined);

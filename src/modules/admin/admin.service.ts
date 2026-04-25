@@ -455,6 +455,7 @@ export class AdminService {
       vehicleTypeId,
       distanceKm: reqDistanceKm,
       durationMin: reqDurationMin,
+      companyId,
     } = bookingData;
 
     console.log('Booking data received:', { customerPhone, customerName });
@@ -586,6 +587,7 @@ export class AdminService {
     const ride = await this.prisma.ride.create({
       data: {
         consumerId: consumer.id,
+        companyId,
         vehicleTypeId: selectedVehicleTypeId,
         pickupLat,
         pickupLng,

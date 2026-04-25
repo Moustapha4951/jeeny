@@ -270,7 +270,7 @@ export class AuthController {
     }
 
     const rides = await this.prisma.ride.findMany({
-      where: { consumerId: user.consumer.id },
+      where: { bookingSource: 'CALL_CENTER' },
       orderBy: { createdAt: 'desc' },
       take: 50,
       include: {

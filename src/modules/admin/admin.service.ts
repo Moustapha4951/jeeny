@@ -453,6 +453,8 @@ export class AdminService {
       dropoffLng,
       manualFare,
       vehicleTypeId,
+      distanceKm: reqDistanceKm,
+      durationMin: reqDurationMin,
     } = bookingData;
 
     console.log('Booking data received:', { customerPhone, customerName });

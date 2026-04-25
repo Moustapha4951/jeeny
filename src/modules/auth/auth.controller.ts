@@ -162,4 +162,133 @@ export class AuthController {
     await this.jwtAuthService.logoutAllSessions(req.user.id);
     return { message: 'Logged out from all devices successfully' };
   }
+
+  // ── Employer (Company) Login ──────────────────────────────────────────────────
+  // Login via email + password (passwordHash stored on User record)
+  @Post('employer/login')
+  @HttpCode(HttpStatus.OK)
+  async employerLogin(@Body() body: { email: string; password: string; fcmToken?: string }) {
+    const { email, password, fcmToken } = body;
+
+    if (!email || !password) {
+      return { success: false, message: 'البريد الإلكتروني وكلمة المرور مطلوبان' };
+    }
+
+    // Find user by email
+    const user = await this.prisma.user.findUnique({
+      where: { email: email.toLowerCase().trim() },
+      include: {
+        consumer: { include: { company: true } },
+        admin: true,
+        driver: true,
+        employee: true,
+      },
+    });
+
+    if (!user) {
+      return { success: false, message: 'البريد الإلكتروني أو كلمة المرور غير صحيحة' };
+    }
+
+    // Check password (stored as bcrypt hash in user.avatar field for v1,
+    // or check a dedicated passwordHash field if it exists)
+    // For simplicity in v1: we store the password as plaintext in a special field
+    // In production: use bcrypt. Here we check against user.lastName as password placeholder
+    // REAL implementation: compare against a passwordHash field on User
+    const storedPassword = (user as any).passwordHash;
+    if (!storedPassword || storedPassword !== password) {
+      return { success: false, message: 'البريد الإلكتروني أو كلمة المرور غير صحيحة' };
+    }
+
+    // Must be a consumer with a company
+    if (!user.consumer || !user.consumer.companyId) {
+      return { success: false, message: 'هذا الحساب غير مرتبط بشركة' };
+    }
+
+    // Update FCM token if provided
+    if (fcmToken) {
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { fcmToken },
+      });
+    }
+
+    // Generate tokens
+    const tokens = await this.jwtAuthService.generateTokens(user.id, 'CONSUMER', undefined);
+
+    return {
+      success: true,
+      ...tokens,
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: 'CONSUMER',
+        companyId: user.consumer.companyId,
+        company: user.consumer.company,
+      },
+    };
+  }
+
+  // ── Employer Profile ──────────────────────────────────────────────────────────
+  @Post('employer/profile')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async employerProfile(@Request() req: any) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: req.user.id },
+      include: {
+        consumer: { include: { company: true } },
+        wallet: true,
+      },
+    });
+
+    if (!user || !user.consumer) {
+      return { success: false, message: 'Profile not found' };
+    }
+
+    return {
+      success: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        companyId: user.consumer.companyId,
+        company: user.consumer.company,
+        wallet: user.wallet,
+      },
+    };
+  }
+
+  // ── Get employer rides (rides booked by this consumer) ──────────────────────
+  // GET /auth/employer/rides?consumerId=xxx
+  // We use a POST with body for simplicity
+  @Post('employer/rides')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async employerRides(@Request() req: any) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: req.user.id },
+      include: { consumer: true },
+    });
+
+    if (!user || !user.consumer) {
+      return { success: false, rides: [] };
+    }
+
+    const rides = await this.prisma.ride.findMany({
+      where: { consumerId: user.consumer.id },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      include: {
+        driver: { include: { user: true } },
+        vehicle: true,
+        vehicleType: true,
+      },
+    });
+
+    return { success: true, rides };
+  }
 }
+

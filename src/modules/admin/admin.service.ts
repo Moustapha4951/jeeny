@@ -537,21 +537,26 @@ export class AdminService {
       };
     }
 
-    // Calculate distance (simple Haversine formula)
-    const R = 6371; // Earth radius in km
-    const dLat = ((dropoffLat - pickupLat) * Math.PI) / 180;
-    const dLon = ((dropoffLng - pickupLng) * Math.PI) / 180;
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos((pickupLat * Math.PI) / 180) *
-        Math.cos((dropoffLat * Math.PI) / 180) *
-        Math.sin(dLon / 2) *
-        Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    const distanceKm = R * c;
+    let distanceKm = reqDistanceKm;
+    let durationMin = reqDurationMin;
 
-    // Estimate duration (assuming 30 km/h average speed)
-    const durationMin = Math.ceil((distanceKm / 30) * 60);
+    if (!distanceKm || !durationMin) {
+      // Calculate distance (simple Haversine formula)
+      const R = 6371; // Earth radius in km
+      const dLat = ((dropoffLat - pickupLat) * Math.PI) / 180;
+      const dLon = ((dropoffLng - pickupLng) * Math.PI) / 180;
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos((pickupLat * Math.PI) / 180) *
+          Math.cos((dropoffLat * Math.PI) / 180) *
+          Math.sin(dLon / 2) *
+          Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      distanceKm = R * c;
+
+      // Estimate duration (assuming 30 km/h average speed)
+      durationMin = Math.ceil((distanceKm / 30) * 60);
+    }
 
     // Calculate fare or use manual fare
     let estimatedFare = manualFare;

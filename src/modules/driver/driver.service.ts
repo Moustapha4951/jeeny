@@ -210,18 +210,34 @@ export class DriverService {
   async acceptRide(userId: string, rideId: string) {
     const driver = await this.prisma.driver.findUnique({
       where: { userId },
+      include: {
+        vehicles: {
+          where: { isActive: true, status: 'APPROVED' },
+          take: 1,
+        },
+      },
     });
 
     if (!driver) {
       throw new NotFoundException('Driver not found');
     }
 
+    const vehicleId = driver.vehicles?.[0]?.id;
+
     const ride = await this.prisma.ride.update({
       where: { id: rideId },
       data: {
         status: 'DRIVER_ASSIGNED',
         driverId: driver.id,
+        vehicleId: vehicleId,
+        acceptedAt: new Date(),
       },
+    });
+
+    // Reject other pending offers for this ride
+    await this.prisma.rideOffer.updateMany({
+      where: { rideId, driverId: { not: driver.id }, status: 'PENDING' },
+      data: { status: 'REJECTED' },
     });
 
     return { success: true, ride };
@@ -250,14 +266,16 @@ export class DriverService {
       },
       include: {
         consumer: {
-          include: {
-            user: true,
-          },
+          include: { user: true },
         },
       },
     });
 
-    // TODO: Send FCM notification to consumer that driver has arrived
+    // Log event
+    await this.prisma.rideLog.create({
+      data: { rideId, event: 'DRIVER_ARRIVED', data: { driverId: driver.id } },
+    });
+
     console.log(`✅ Driver ${driver.id} arrived at pickup for ride ${rideId}`);
 
     return { success: true, ride };
@@ -291,6 +309,11 @@ export class DriverService {
       data: { isOnTrip: true },
     });
 
+    // Log event
+    await this.prisma.rideLog.create({
+      data: { rideId, event: 'STARTED', data: { driverId: driver.id } },
+    });
+
     console.log(`🚗 Ride ${rideId} started by driver ${driver.id}`);
 
     return { success: true, ride };
@@ -314,7 +337,7 @@ export class DriverService {
       throw new NotFoundException('Ride not found');
     }
 
-    const finalFare = Number(ride.estimatedFare || 0);
+    const finalFare = Number(ride.finalFare || ride.estimatedFare || 0);
 
     // Update ride to COMPLETED
     const updatedRide = await this.prisma.ride.update({
@@ -324,17 +347,12 @@ export class DriverService {
         completedAt: new Date(),
         finalFare: finalFare,
       },
-      include: {
-        consumer: {
-          include: { user: true },
-        },
-      },
     });
 
     // Mark driver as no longer on trip
     await this.prisma.driver.update({
       where: { userId },
-      data: { isOnTrip: false, totalTrips: { increment: 1 } },
+      data: { isOnTrip: false, totalTrips: { increment: 1 }, totalEarnings: { increment: finalFare } },
     });
 
     // Credit driver wallet (85% of fare after 15% platform commission)
@@ -346,13 +364,31 @@ export class DriverService {
         where: { id: driver.user.wallet.id },
         data: { balance: { increment: driverShare } },
       });
-      console.log(`💰 Credited ${driverShare} MRU to driver ${driver.id} wallet`);
+
+      // Create transaction record
+      await this.prisma.transaction.create({
+        data: {
+          walletId: driver.user.wallet.id,
+          userId: userId,
+          type: 'RIDE_PAYMENT',
+          amount: driverShare,
+          status: 'COMPLETED',
+          rideId: rideId,
+          description: `أجرة الرحلة ${ride.rideNumber}`,
+          descriptionAr: `أجرة الرحلة ${ride.rideNumber}`,
+        },
+      });
     }
+
+    // Log ride completion
+    await this.prisma.rideLog.create({
+      data: { rideId, event: 'COMPLETED', data: { finalFare, driverShare } },
+    });
 
     // Emit WebSocket update to driver
     await this.driverGateway.sendDriverUpdate(userId);
 
-    console.log(`✅ Ride ${rideId} completed by driver ${driver.id}`);
+    console.log(`✅ Ride ${rideId} completed by driver ${driver.id}, earned ${driverShare} MRU`);
 
     return { success: true, ride: updatedRide, driverShare };
   }
@@ -370,6 +406,8 @@ export class DriverService {
       where: { id: rideId },
       data: {
         status: 'CANCELLED_BY_DRIVER',
+        cancelledAt: new Date(),
+        cancelledBy: 'DRIVER',
         cancelReason: reason,
       },
     });
@@ -378,6 +416,11 @@ export class DriverService {
     await this.prisma.driver.update({
       where: { userId },
       data: { isOnTrip: false },
+    });
+
+    // Log cancellation
+    await this.prisma.rideLog.create({
+      data: { rideId, event: 'CANCELLED', data: { cancelledBy: 'DRIVER', reason } },
     });
 
     console.log(`❌ Ride ${rideId} cancelled by driver ${driver.id}: ${reason}`);

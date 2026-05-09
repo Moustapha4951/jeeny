@@ -20,6 +20,11 @@ export class MatchingService {
     private firebase: FirebaseService,
   ) {}
 
+  private async getSystemSetting(key: string, defaultValue: any): Promise<any> {
+    const setting = await this.prisma.systemSetting.findUnique({ where: { key } });
+    return setting ? setting.value : defaultValue;
+  }
+
   async findAndNotifyDrivers(
     rideId: string,
     pickupLat: number,
@@ -28,13 +33,19 @@ export class MatchingService {
   ): Promise<void> {
     this.logger.log(`🔍 Finding drivers for ride ${rideId} at (${pickupLat}, ${pickupLng})`);
     
+    // Load driver preferences from system settings
+    const minRating = Number(await this.getSystemSetting('min_driver_rating', 4.0));
+    const strategy = await this.getSystemSetting('matching_strategy', 'NEAREST');
+    const maxDrivers = Number(await this.getSystemSetting('matching_max_drivers', 5));
+    let maxRadius = Number(await this.getSystemSetting('matching_radius_km', 10));
+    if (maxRadius < 1) maxRadius = 10;
+
     let radius = 2; // Start with 2km radius
-    const maxRadius = 10; // Maximum 10km radius
     let drivers: any[] = [];
 
     // Expand search radius until we find drivers
     while (drivers.length === 0 && radius <= maxRadius) {
-      drivers = await this.findNearbyDrivers(pickupLat, pickupLng, radius, vehicleTypeId);
+      drivers = await this.findNearbyDrivers(pickupLat, pickupLng, radius, vehicleTypeId, minRating);
       
       if (drivers.length === 0) {
         radius += 2; // Expand by 2km
@@ -46,6 +57,12 @@ export class MatchingService {
 
     if (drivers.length === 0) {
       this.logger.warn(`❌ No drivers found within ${maxRadius}km for ride ${rideId}`);
+
+      // Update ride status to NO_DRIVERS_FOUND
+      await this.prisma.ride.update({
+        where: { id: rideId },
+        data: { status: 'NO_DRIVERS_FOUND' },
+      }).catch(() => {});
       return;
     }
 
@@ -53,12 +70,17 @@ export class MatchingService {
     const rankedDrivers = this.rankDrivers(drivers, pickupLat, pickupLng);
     this.logger.log(`📊 Ranked ${rankedDrivers.length} drivers`);
 
+    // Apply strategy: NEAREST takes top N, ALL sends to all
+    const topDrivers = strategy === 'ALL'
+      ? rankedDrivers
+      : rankedDrivers.slice(0, maxDrivers);
+
     // Create ride offers for top drivers
-    await this.createRideOffers(rideId, rankedDrivers.slice(0, 5));
+    await this.createRideOffers(rideId, topDrivers);
 
     // Send notifications to drivers
-    await this.notifyDrivers(rideId, rankedDrivers.slice(0, 5));
-    this.logger.log(`📨 Sent notifications to ${Math.min(rankedDrivers.length, 5)} drivers`);
+    await this.notifyDrivers(rideId, topDrivers);
+    this.logger.log(`📨 Sent notifications to ${topDrivers.length} drivers`);
   }
 
   private async findNearbyDrivers(
@@ -66,6 +88,7 @@ export class MatchingService {
     longitude: number,
     radiusKm: number,
     vehicleTypeId: string,
+    minRating: number = 4.0,
   ): Promise<any[]> {
     this.logger.log(`🔍 Searching for drivers within ${radiusKm}km of (${latitude}, ${longitude})`);
     
@@ -91,6 +114,7 @@ export class MatchingService {
         userId: { in: driverIds },
         isOnline: true,
         status: 'APPROVED',
+        rating: { gte: minRating },
         vehicles: {
           some: {
             typeId: vehicleTypeId,

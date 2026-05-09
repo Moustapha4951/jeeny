@@ -10,6 +10,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { WalletModule } from './modules/wallet/wallet.module';
 import { PaymentsModule } from './modules/payments/payments.module';
+import { RidesModule } from './modules/rides/rides.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { DriverModule } from './modules/driver/driver.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
@@ -30,6 +31,7 @@ import { validate } from './config/env.validation';
     UsersModule,
     WalletModule,
     PaymentsModule,
+    RidesModule,
     AdminModule,
     DriverModule,
   ],

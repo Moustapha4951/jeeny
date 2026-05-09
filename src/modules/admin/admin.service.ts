@@ -441,7 +441,67 @@ export class AdminService {
     return vehicleTypes;
   }
 
+  async validateBookingConfiguration() {
+    const errors: string[] = [];
+
+    // Check vehicle types exist
+    const vehicleTypes = await this.prisma.vehicleType.findMany({
+      where: { isActive: true },
+    });
+    if (vehicleTypes.length === 0) {
+      errors.push('لا توجد أنواع مركبات مفعلة. يرجى من المشرف إضافة أنواع المركبات');
+    }
+
+    // Check required system settings
+    const requiredSettings = [
+      { key: 'matching_radius_km', label: 'نطاق البحث عن السائقين (كم)' },
+      { key: 'commission_rate_percent', label: 'نسبة عمولة المنصة' },
+      { key: 'min_driver_rating', label: 'الحد الأدنى لتقييم السائق' },
+      { key: 'ride_offer_expiry_seconds', label: 'مدة صلاحية عرض الرحلة' },
+    ];
+
+    const existingSettings = await this.prisma.systemSetting.findMany({
+      where: { key: { in: requiredSettings.map(s => s.key) } },
+    });
+    const existingKeys = new Set(existingSettings.map(s => s.key));
+
+    for (const setting of requiredSettings) {
+      if (!existingKeys.has(setting.key)) {
+        errors.push(`الإعداد "${setting.label}" غير مضبوط. يرجى من المشرف ضبط الإعدادات`);
+      }
+    }
+
+    // Check at least one approved online driver exists
+    const onlineDrivers = await this.prisma.driver.count({
+      where: {
+        isOnline: true,
+        status: 'APPROVED',
+        vehicles: { some: { status: 'APPROVED', isActive: true } },
+      },
+    });
+    if (onlineDrivers === 0) {
+      errors.push('لا يوجد سائقون متاحون حالياً. يرجى التأكد من وجود سائقين نشطين');
+    }
+
+    return {
+      valid: errors.length === 0,
+      errors,
+      vehicleTypes,
+    };
+  }
+
   async bookRideForCustomer(bookingData: any) {
+    // Validate configuration before proceeding
+    const configValidation = await this.validateBookingConfiguration();
+    if (!configValidation.valid) {
+      return {
+        success: false,
+        message: 'تعذر إنشاء الرحلة بسبب مشاكل في الإعدادات',
+        errors: configValidation.errors,
+        requiresAdminAction: true,
+      };
+    }
+
     const {
       customerPhone,
       customerName,
@@ -515,22 +575,11 @@ export class AdminService {
       });
     }
 
-    // Get default vehicle type if not provided
+    // Use vehicle type from validated config
+    const availableTypes = configValidation.vehicleTypes;
     let selectedVehicleTypeId = vehicleTypeId;
-    if (!selectedVehicleTypeId) {
-      // Prioritize economy if it exists
-      let defaultVehicleType = await this.prisma.vehicleType.findUnique({
-        where: { id: 'economy' }
-      });
-      
-      // Fallback to cheapest if economy doesn't exist
-      if (!defaultVehicleType || !defaultVehicleType.isActive) {
-        defaultVehicleType = await this.prisma.vehicleType.findFirst({
-          where: { isActive: true },
-          orderBy: { basePrice: 'asc' },
-        });
-      }
-      selectedVehicleTypeId = defaultVehicleType?.id;
+    if (!selectedVehicleTypeId || !availableTypes.some(vt => vt.id === selectedVehicleTypeId)) {
+      selectedVehicleTypeId = availableTypes[0]?.id;
     }
 
     if (!selectedVehicleTypeId) {

@@ -202,4 +202,10 @@ export class AdminController {
   ) {
     return this.adminService.rejectVehicle(vehicleId, body.reason);
   }
+
+  // Seed test employer account
+  @Post('seed/employer')
+  async seedEmployer() {
+    return this.adminService.seedEmployerAccount();
+  }
 }

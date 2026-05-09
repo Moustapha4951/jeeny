@@ -1336,5 +1336,114 @@ export class AdminService {
 
     return { success: true, vehicle };
   }
+
+  async seedEmployerAccount() {
+    const results: string[] = [];
+
+    // 1. Seed system settings
+    const requiredSettings = [
+      { key: 'matching_strategy', value: 'NEAREST', category: 'matching' },
+      { key: 'matching_max_drivers', value: 5, category: 'matching' },
+      { key: 'matching_radius_km', value: 10, category: 'matching' },
+      { key: 'commission_rate_percent', value: 15, category: 'payment' },
+      { key: 'ride_offer_expiry_seconds', value: 30, category: 'matching' },
+      { key: 'min_driver_rating', value: 4.0, category: 'matching' },
+      { key: 'driver_minimum_balance', value: 0, category: 'payment' },
+    ];
+
+    for (const s of requiredSettings) {
+      const exists = await this.prisma.systemSetting.findUnique({ where: { key: s.key } });
+      if (!exists) {
+        await this.prisma.systemSetting.create({ data: s });
+        results.push(`Setting ${s.key} created`);
+      }
+    }
+
+    // 2. Seed vehicle types
+    const vehicleTypes = [
+      { name: 'Economy', nameAr: 'اقتصادية', nameFr: 'Économique', basePrice: 50, pricePerKm: 15, pricePerMin: 2, minFare: 100, capacity: 4, icon: 'car' },
+      { name: 'Comfort', nameAr: 'مريحة', nameFr: 'Confort', basePrice: 80, pricePerKm: 20, pricePerMin: 3, minFare: 150, capacity: 4, icon: 'car' },
+    ];
+
+    for (const vt of vehicleTypes) {
+      const exists = await this.prisma.vehicleType.findFirst({ where: { name: vt.name } });
+      if (!exists) {
+        await this.prisma.vehicleType.create({ data: { ...vt, isActive: true } });
+        results.push(`Vehicle type ${vt.name} created`);
+      }
+    }
+
+    // 3. Create company
+    let company = await this.prisma.company.findFirst({ where: { registrationNumber: 'Masar-001' } });
+    if (!company) {
+      company = await this.prisma.company.create({
+        data: {
+          name: 'شركة مسار للنقل',
+          nameAr: 'شركة مسار للنقل',
+          registrationNumber: 'Masar-001',
+          contactPerson: 'مدير الشركة',
+          contactPhone: '+22212345670',
+          contactEmail: 'admin@masar.mr',
+          address: 'نواكشوط',
+          city: 'نواكشوط',
+          status: 'ACTIVE',
+          isActive: true,
+          billingType: 'POSTPAID',
+          creditLimit: 50000,
+          currentBalance: 0,
+          paymentTermDays: 30,
+        },
+      });
+      results.push(`Company ${company.name} created`);
+    }
+
+    // 4. Create employer user
+    let employerUser = await this.prisma.user.findUnique({ where: { email: 'employer@masar.mr' } });
+    if (!employerUser) {
+      employerUser = await this.prisma.user.create({
+        data: {
+          email: 'employer@masar.mr',
+          firstName: 'موظف',
+          lastName: 'الشركة',
+          phone: '+22212345670',
+          phoneVerified: true,
+          fcmToken: 'Password123', // Password stored here for v1
+        },
+      });
+
+      // Create consumer profile linked to company
+      await this.prisma.consumer.create({
+        data: {
+          userId: employerUser.id,
+          companyId: company.id,
+        },
+      });
+
+      // Create wallet
+      await this.prisma.wallet.create({
+        data: {
+          userId: employerUser.id,
+          type: 'CONSUMER',
+          balance: 10000,
+          currency: 'MRU',
+        },
+      });
+
+      results.push(`Employer account created: employer@masar.mr / Password123`);
+    } else {
+      results.push(`Employer account already exists: employer@masar.mr`);
+    }
+
+    return {
+      success: true,
+      message: 'تم تجهيز بيانات الاختبار',
+      results,
+      loginInfo: {
+        email: 'employer@masar.mr',
+        password: 'Password123',
+        companyName: 'شركة مسار للنقل',
+      },
+    };
+  }
 }
 

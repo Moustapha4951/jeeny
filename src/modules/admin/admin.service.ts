@@ -575,10 +575,12 @@ export class AdminService {
       });
     }
 
-    // Use vehicle type from validated config
+    // Use vehicle type from validated config - default to cheapest
     const availableTypes = configValidation.vehicleTypes;
     let selectedVehicleTypeId = vehicleTypeId;
     if (!selectedVehicleTypeId || !availableTypes.some(vt => vt.id === selectedVehicleTypeId)) {
+      // Sort by basePrice ascending and pick cheapest
+      availableTypes.sort((a, b) => Number(a.basePrice) - Number(b.basePrice));
       selectedVehicleTypeId = availableTypes[0]?.id;
     }
 
@@ -1436,6 +1438,39 @@ export class AdminService {
 
     // 5. Fix existing driver vehicles: replace short typeId strings with proper UUIDs
     const allVehicleTypes = await this.prisma.vehicleType.findMany({ where: { isActive: true } });
+
+    // Add a comfort vehicle for each driver that doesn't already have one
+    const allDriversWithVehicles = await this.prisma.driver.findMany({
+      where: { status: 'APPROVED' },
+      include: { vehicles: true },
+    });
+    const comfortType = allVehicleTypes.find(vt => vt.name === 'Comfort');
+    for (const driver of allDriversWithVehicles) {
+      const hasComfort = driver.vehicles.some(v => v.typeId === comfortType?.id);
+      if (!hasComfort && comfortType) {
+        const existingVehicle = driver.vehicles[0];
+        if (existingVehicle) {
+          await this.prisma.vehicle.create({
+            data: {
+              driverId: driver.id,
+              typeId: comfortType.id,
+              brand: existingVehicle.brand,
+              model: existingVehicle.model,
+              year: existingVehicle.year,
+              color: 'Black',
+              colorAr: 'أسود',
+              plateNumber: `${existingVehicle.plateNumber}-C`,
+              registrationNumber: `${existingVehicle.registrationNumber}-C`,
+              registrationExpiry: existingVehicle.registrationExpiry,
+              status: 'APPROVED',
+              isActive: true,
+            },
+          });
+          results.push(`Created Comfort vehicle for driver ${driver.id}`);
+        }
+      }
+    }
+
     const vehicles = await this.prisma.vehicle.findMany({
       where: { isActive: true },
       include: { driver: true },

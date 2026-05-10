@@ -680,7 +680,7 @@ export class AdminService {
   }
 
   async estimateFare(estimateData: any) {
-    const { pickupLat, pickupLng, dropoffLat, dropoffLng, distanceKm, durationMin } = estimateData;
+    const { pickupLat, pickupLng, dropoffLat, dropoffLng, distanceKm, durationMin, vehicleTypeId } = estimateData;
 
     let calculatedDistanceKm = distanceKm;
     let calculatedDurationMin = durationMin;
@@ -701,29 +701,61 @@ export class AdminService {
       calculatedDurationMin = Math.ceil((calculatedDistanceKm / 30) * 60);
     }
 
-    // Get default vehicle type for pricing
-    const defaultVehicleType = await this.prisma.vehicleType.findFirst({
-      where: { isActive: true },
-      orderBy: { basePrice: 'asc' },
-    });
+    // Use specific vehicle type if provided, otherwise cheapest
+    let vehicleType;
+    if (vehicleTypeId) {
+      vehicleType = await this.prisma.vehicleType.findUnique({
+        where: { id: vehicleTypeId },
+      });
+    }
+    if (!vehicleType) {
+      vehicleType = await this.prisma.vehicleType.findFirst({
+        where: { isActive: true },
+        orderBy: { basePrice: 'asc' },
+      });
+    }
 
     let estimatedFare = 100; // Default fallback
-    if (defaultVehicleType) {
+    if (vehicleType) {
       estimatedFare =
-        Number(defaultVehicleType.basePrice) +
-        Number(defaultVehicleType.pricePerKm) * calculatedDistanceKm +
-        Number(defaultVehicleType.pricePerMin) * calculatedDurationMin;
+        Number(vehicleType.basePrice) +
+        Number(vehicleType.pricePerKm) * calculatedDistanceKm +
+        Number(vehicleType.pricePerMin) * calculatedDurationMin;
 
-      // Apply minimum fare
-      if (estimatedFare < Number(defaultVehicleType.minFare)) {
-        estimatedFare = Number(defaultVehicleType.minFare);
+      if (estimatedFare < Number(vehicleType.minFare)) {
+        estimatedFare = Number(vehicleType.minFare);
       }
     }
+
+    // Also return all vehicle types with their prices so the app can display them
+    const allTypes = await this.prisma.vehicleType.findMany({ where: { isActive: true } });
+    const typePricing = allTypes.map(vt => ({
+      id: vt.id,
+      name: vt.name,
+      nameAr: vt.nameAr,
+      nameFr: vt.nameFr,
+      icon: vt.icon,
+      basePrice: Number(vt.basePrice),
+      pricePerKm: Number(vt.pricePerKm),
+      pricePerMin: Number(vt.pricePerMin),
+      minFare: Number(vt.minFare),
+      capacity: vt.capacity,
+      estimatedFare: 
+        Number(vt.basePrice) +
+        Number(vt.pricePerKm) * calculatedDistanceKm +
+        Number(vt.pricePerMin) * calculatedDurationMin >= Number(vt.minFare)
+          ? Number(Number(vt.basePrice) +
+              Number(vt.pricePerKm) * calculatedDistanceKm +
+              Number(vt.pricePerMin) * calculatedDurationMin)
+          : Number(vt.minFare),
+    }));
 
     return {
       estimatedFare: Number(estimatedFare.toFixed(0)),
       distanceKm: Number(calculatedDistanceKm.toFixed(2)),
       durationMin: calculatedDurationMin,
+      vehicleType: vehicleType ? { id: vehicleType.id, name: vehicleType.name, nameAr: vehicleType.nameAr } : null,
+      vehicleTypes: typePricing,
     };
   }
 

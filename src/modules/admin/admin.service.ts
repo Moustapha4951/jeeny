@@ -1434,6 +1434,69 @@ export class AdminService {
       results.push(`Employer account already exists: employer@masar.mr`);
     }
 
+    // 5. Fix existing driver vehicles: replace short typeId strings with proper UUIDs
+    const allVehicleTypes = await this.prisma.vehicleType.findMany({ where: { isActive: true } });
+    const vehicles = await this.prisma.vehicle.findMany({
+      where: { isActive: true },
+      include: { driver: true },
+    });
+
+    for (const vehicle of vehicles) {
+      // Check if typeId is a short string (not a UUID) or invalid
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(vehicle.typeId || '');
+      if (!isUuid && vehicle.typeId) {
+        const vehicleType = allVehicleTypes.find(vt => vt.name.toLowerCase() === vehicle.typeId!.toLowerCase());
+        if (vehicleType) {
+          await this.prisma.vehicle.update({
+            where: { id: vehicle.id },
+            data: { typeId: vehicleType.id },
+          });
+          results.push(`Fixed vehicle ${vehicle.id}: typeId ${vehicle.typeId} → ${vehicleType.id} (${vehicleType.name})`);
+        } else {
+          // Default to first vehicle type
+          const defaultType = allVehicleTypes[0];
+          if (defaultType) {
+            await this.prisma.vehicle.update({
+              where: { id: vehicle.id },
+              data: { typeId: defaultType.id },
+            });
+            results.push(`Defaulted vehicle ${vehicle.id} typeId to ${defaultType.name}`);
+          }
+        }
+      } else if (!vehicle.typeId) {
+        const defaultType = allVehicleTypes[0];
+        if (defaultType) {
+          await this.prisma.vehicle.update({
+            where: { id: vehicle.id },
+            data: { typeId: defaultType.id },
+          });
+          results.push(`Set vehicle ${vehicle.id} typeId to ${defaultType.name} (was null)`);
+        }
+      }
+
+      // Fix driver location if missing
+      if (vehicle.driver && (!vehicle.driver.currentLat || !vehicle.driver.currentLng)) {
+        await this.prisma.driver.update({
+          where: { id: vehicle.driver.id },
+          data: {
+            currentLat: 18.0792211,
+            currentLng: -15.9646747,
+            lastLocationAt: new Date(),
+          },
+        });
+        results.push(`Set default location for driver ${vehicle.driver.id}`);
+      }
+
+      // Make sure driver is online
+      if (vehicle.driver && !vehicle.driver.isOnline) {
+        await this.prisma.driver.update({
+          where: { id: vehicle.driver.id },
+          data: { isOnline: true },
+        });
+        results.push(`Set driver ${vehicle.driver.id} to online`);
+      }
+    }
+
     return {
       success: true,
       message: 'تم تجهيز بيانات الاختبار',

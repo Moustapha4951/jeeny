@@ -113,6 +113,7 @@ export class MatchingService {
       where: {
         userId: { in: driverIds },
         isOnline: true,
+        isOnTrip: false,
         status: 'APPROVED',
         rating: { gte: minRating },
         vehicles: {

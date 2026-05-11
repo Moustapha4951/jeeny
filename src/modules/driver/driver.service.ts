@@ -244,7 +244,13 @@ export class DriverService {
   }
 
   async rejectRide(userId: string, rideId: string, reason: string) {
-    // Log rejection for analytics
+    const driver = await this.prisma.driver.findUnique({ where: { userId } });
+    if (driver) {
+      await this.prisma.rideOffer.updateMany({
+        where: { rideId, driverId: driver.id, status: 'PENDING' },
+        data: { status: 'REJECTED', respondedAt: new Date() },
+      });
+    }
     return { success: true };
   }
 
@@ -339,6 +345,20 @@ export class DriverService {
 
     const finalFare = Number(ride.finalFare || ride.estimatedFare || 0);
 
+    // Look up vehicle type admin commission
+    let adminCommissionPercent = 15; // Default
+    if (ride.vehicleTypeId) {
+      const vehicleType = await this.prisma.vehicleType.findUnique({
+        where: { id: ride.vehicleTypeId },
+      });
+      if (vehicleType) {
+        adminCommissionPercent = Number(vehicleType.adminCommission);
+      }
+    }
+
+    const driverShare = finalFare * ((100 - adminCommissionPercent) / 100);
+    const commissionAmount = finalFare - driverShare;
+
     // Update ride to COMPLETED
     const updatedRide = await this.prisma.ride.update({
       where: { id: rideId },
@@ -352,20 +372,17 @@ export class DriverService {
     // Mark driver as no longer on trip
     await this.prisma.driver.update({
       where: { userId },
-      data: { isOnTrip: false, totalTrips: { increment: 1 }, totalEarnings: { increment: finalFare } },
+      data: { isOnTrip: false, totalTrips: { increment: 1 }, totalEarnings: { increment: driverShare } },
     });
 
-    // Credit driver wallet (85% of fare after 15% platform commission)
-    const platformFeePercent = 15;
-    const driverShare = finalFare * ((100 - platformFeePercent) / 100);
-
+    // Credit driver wallet with net amount (after commission)
     if (driver.user.wallet && driverShare > 0) {
       await this.prisma.wallet.update({
         where: { id: driver.user.wallet.id },
         data: { balance: { increment: driverShare } },
       });
 
-      // Create transaction record
+      // Create driver earning transaction
       await this.prisma.transaction.create({
         data: {
           walletId: driver.user.wallet.id,
@@ -378,17 +395,33 @@ export class DriverService {
           descriptionAr: `أجرة الرحلة ${ride.rideNumber}`,
         },
       });
+
+      // Create commission deduction transaction
+      if (commissionAmount > 0) {
+        await this.prisma.transaction.create({
+          data: {
+            walletId: driver.user.wallet.id,
+            userId: userId,
+            type: 'COMMISSION_DEDUCTION',
+            amount: -commissionAmount,
+            status: 'COMPLETED',
+            rideId: rideId,
+            description: `عمولة المنصة (${adminCommissionPercent}%)`,
+            descriptionAr: `عمولة المنصة (${adminCommissionPercent}%)`,
+          },
+        });
+      }
     }
 
     // Log ride completion
     await this.prisma.rideLog.create({
-      data: { rideId, event: 'COMPLETED', data: { finalFare, driverShare } },
+      data: { rideId, event: 'COMPLETED', data: { finalFare, driverShare, commissionAmount, adminCommissionPercent } },
     });
 
     // Emit WebSocket update to driver
     await this.driverGateway.sendDriverUpdate(userId);
 
-    console.log(`✅ Ride ${rideId} completed by driver ${driver.id}, earned ${driverShare} MRU`);
+    console.log(`✅ Ride ${rideId} completed by driver ${driver.id}, earned ${driverShare} MRU (commission: ${commissionAmount} MRU at ${adminCommissionPercent}%)`);
 
     return { success: true, ride: updatedRide, driverShare };
   }

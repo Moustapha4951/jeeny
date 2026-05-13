@@ -232,6 +232,17 @@ export class DriverService {
         vehicleId: vehicleId,
         acceptedAt: new Date(),
       },
+      include: {
+        consumer: {
+          include: { user: true },
+        },
+      },
+    });
+
+    // Mark driver as on trip so they don't receive new ride notifications
+    await this.prisma.driver.update({
+      where: { userId },
+      data: { isOnTrip: true },
     });
 
     // Reject other pending offers for this ride

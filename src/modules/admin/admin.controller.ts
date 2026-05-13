@@ -86,6 +86,12 @@ export class AdminController {
     return this.adminService.cancelRide(id, body.reason);
   }
 
+  // Resend ride endpoint — re-dispatches a timed-out or cancelled ride
+  @Post('rides/:id/resend')
+  async resendRide(@Param('id') id: string) {
+    return this.adminService.resendRide(id);
+  }
+
   // Create vehicle type endpoint (public for testing)
   @Post('vehicle-types')
   async createVehicleType(@Body() data: any) {

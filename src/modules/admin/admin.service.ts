@@ -794,6 +794,51 @@ export class AdminService {
     };
   }
 
+  async resendRide(id: string) {
+    const ride = await this.prisma.ride.findUnique({
+      where: { id },
+    });
+
+    if (!ride) {
+      return { success: false, message: 'الرحلة غير موجودة' };
+    }
+
+    // Only allow resending rides that failed or were cancelled
+    const resendableStatuses = ['NO_DRIVERS_FOUND', 'CANCELLED_BY_RIDER', 'CANCELLED_BY_DRIVER', 'SEARCHING'];
+    if (!resendableStatuses.includes(ride.status)) {
+      return { success: false, message: 'لا يمكن إعادة إرسال هذه الرحلة' };
+    }
+
+    // Reset ride status to SEARCHING
+    await this.prisma.ride.update({
+      where: { id },
+      data: {
+        status: 'SEARCHING',
+        driverId: null,
+        vehicleId: null,
+        acceptedAt: null,
+        cancelledAt: null,
+        cancelReason: null,
+        cancelledBy: null,
+      },
+    });
+
+    // Re-trigger matching (rejected drivers will be automatically excluded)
+    this.matchingService.findAndNotifyDrivers(
+      ride.id,
+      Number(ride.pickupLat),
+      Number(ride.pickupLng),
+      ride.vehicleTypeId,
+    ).catch((error) => {
+      console.error('Error resending ride to drivers:', error);
+    });
+
+    return {
+      success: true,
+      message: 'تم إعادة إرسال الرحلة بنجاح',
+    };
+  }
+
   async createVehicleType(data: any) {
     const vehicleType = await this.prisma.vehicleType.create({
       data: {

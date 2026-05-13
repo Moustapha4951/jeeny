@@ -250,6 +250,32 @@ export class DriverService {
         where: { rideId, driverId: driver.id, status: 'PENDING' },
         data: { status: 'REJECTED', respondedAt: new Date() },
       });
+
+      // If no more PENDING offers remain, check if ride was targeted to a single driver
+      const pendingCount = await this.prisma.rideOffer.count({
+        where: { rideId, status: 'PENDING' },
+      });
+
+      if (pendingCount === 0) {
+        // Count distinct drivers who were ever offered this ride
+        const allOffers = await this.prisma.rideOffer.findMany({
+          where: { rideId },
+          select: { driverId: true },
+          distinct: ['driverId'],
+        });
+
+        if (allOffers.length <= 1) {
+          // Ride was sent to only one driver and they rejected — mark as no drivers found
+          await this.prisma.ride
+            .update({
+              where: { id: rideId },
+              data: { status: 'NO_DRIVERS_FOUND' },
+            })
+            .catch(() => {});
+        }
+        // If multiple drivers were offered, keep ride as SEARCHING
+        // so the admin/system can resend to new drivers
+      }
     }
     return { success: true };
   }

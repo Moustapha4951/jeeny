@@ -66,6 +66,18 @@ export class MatchingService {
       return;
     }
 
+    // Exclude drivers who already rejected an offer for this ride
+    const rejectedOffers = await this.prisma.rideOffer.findMany({
+      where: { rideId, status: 'REJECTED' },
+      select: { driverId: true },
+    });
+    const rejectedDriverIds = new Set(rejectedOffers.map((o) => o.driverId));
+    if (rejectedDriverIds.size > 0) {
+      const beforeCount = drivers.length;
+      drivers = drivers.filter((d) => !rejectedDriverIds.has(d.id));
+      this.logger.log(`🚫 Excluded ${beforeCount - drivers.length} drivers who previously rejected this ride`);
+    }
+
     // Rank drivers
     const rankedDrivers = this.rankDrivers(drivers, pickupLat, pickupLng);
     this.logger.log(`📊 Ranked ${rankedDrivers.length} drivers`);

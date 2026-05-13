@@ -3,6 +3,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { WalletService } from '../wallet/wallet.service';
 import { FirebaseService } from '../../firebase/firebase.service';
 import { MatchingService } from '../rides/matching.service';
+import { DriverGateway } from '../driver/driver.gateway';
 
 @Injectable()
 export class AdminService {
@@ -11,6 +12,7 @@ export class AdminService {
     private walletService: WalletService,
     private firebaseService: FirebaseService,
     private matchingService: MatchingService,
+    private driverGateway: DriverGateway,
   ) {}
 
   async getDashboardStats() {
@@ -778,7 +780,7 @@ export class AdminService {
       };
     }
 
-    await this.prisma.ride.update({
+    const updatedRide = await this.prisma.ride.update({
       where: { id },
       data: {
         status: 'CANCELLED_BY_RIDER', // Using CANCELLED_BY_RIDER for admin cancellations
@@ -787,6 +789,17 @@ export class AdminService {
         cancelledBy: 'ADMIN',
       },
     });
+
+    // Release the driver if one was assigned
+    if (ride.driverId) {
+      await this.prisma.driver.update({
+        where: { id: ride.driverId },
+        data: { isOnTrip: false },
+      }).catch(() => {});
+
+      // Notify driver via WebSocket that the ride was cancelled
+      this.driverGateway.sendRideUpdate(ride.driverId, { ...updatedRide, status: 'CANCELLED_BY_RIDER' }).catch(() => {});
+    }
 
     return {
       success: true,

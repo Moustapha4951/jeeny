@@ -5,9 +5,10 @@ import { PrismaModule } from '../../prisma/prisma.module';
 import { WalletModule } from '../wallet/wallet.module';
 import { FirebaseModule } from '../../firebase/firebase.module';
 import { RidesModule } from '../rides/rides.module';
+import { DriverModule } from '../driver/driver.module';
 
 @Module({
-  imports: [PrismaModule, WalletModule, FirebaseModule, RidesModule],
+  imports: [PrismaModule, WalletModule, FirebaseModule, RidesModule, DriverModule],
   controllers: [AdminController],
   providers: [AdminService],
   exports: [AdminService],

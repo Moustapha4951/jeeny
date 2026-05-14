@@ -253,6 +253,37 @@ export class AuthController {
     };
   }
 
+  // ── Employer Configuration ──────────────────────────────────────────────────────
+  @Post('employer/config/update')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async updateEmployerConfig(@Request() req: any, @Body() body: { dispatchRadiusKm?: number; resendExpansionKm?: number }) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: req.user.id },
+      include: { consumer: { include: { company: true } } },
+    });
+
+    if (!user || !user.consumer || !user.consumer.companyId) {
+      return { success: false, message: 'Profile not found' };
+    }
+
+    const company = user.consumer.company;
+
+    if (!company?.canConfigureDispatch) {
+      return { success: false, message: 'You do not have permission to configure dispatch settings.' };
+    }
+
+    const updatedCompany = await this.prisma.company.update({
+      where: { id: company.id },
+      data: {
+        dispatchRadiusKm: body.dispatchRadiusKm ?? company.dispatchRadiusKm,
+        resendExpansionKm: body.resendExpansionKm ?? company.resendExpansionKm,
+      },
+    });
+
+    return { success: true, company: updatedCompany };
+  }
+
   // ── Get employer rides (rides booked by this consumer) ──────────────────────
   // GET /auth/employer/rides?consumerId=xxx
   // We use a POST with body for simplicity

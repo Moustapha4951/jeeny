@@ -1444,6 +1444,9 @@ model Company {
   creditLimit        Decimal       @default(0) @db.Decimal(12, 2)
   currentBalance     Decimal       @default(0) @db.Decimal(12, 2)
   paymentTermDays    Int           @default(30)
+  canConfigureDispatch Boolean     @default(false)
+  dispatchRadiusKm   Decimal       @default(3.0) @db.Decimal(10, 2)
+  resendExpansionKm  Decimal       @default(2.0) @db.Decimal(10, 2)
   approvedById       String?
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt

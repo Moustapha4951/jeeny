@@ -518,6 +518,8 @@ export class AdminService {
       distanceKm: reqDistanceKm,
       durationMin: reqDurationMin,
       companyId,
+      strategy,
+      targetDriverIds,
     } = bookingData;
 
     console.log('Booking data received:', { customerPhone, customerName });
@@ -658,12 +660,30 @@ export class AdminService {
       },
     });
 
+    // Fetch company configuration if present
+    let maxRadiusKm: number | undefined;
+    let expansionKm: number | undefined;
+
+    if (companyId) {
+      const company = await this.prisma.company.findUnique({ where: { id: companyId } });
+      if (company && company.canConfigureDispatch) {
+        maxRadiusKm = Number(company.dispatchRadiusKm);
+        expansionKm = Number(company.resendExpansionKm);
+      }
+    }
+
     // Find and notify nearby drivers (don't wait for completion)
     this.matchingService.findAndNotifyDrivers(
       ride.id,
       pickupLat,
       pickupLng,
       selectedVehicleTypeId,
+      {
+        maxRadiusKm,
+        expansionKm,
+        strategy,
+        targetDriverIds,
+      }
     ).catch((error) => {
       console.error('Error finding and notifying drivers:', error);
     });
@@ -856,12 +876,25 @@ export class AdminService {
       },
     });
 
+    // Fetch company configuration if present
+    let maxRadiusKm: number | undefined;
+    let expansionKm: number | undefined;
+
+    if (ride.companyId) {
+      const company = await this.prisma.company.findUnique({ where: { id: ride.companyId } });
+      if (company && company.canConfigureDispatch) {
+        maxRadiusKm = Number(company.dispatchRadiusKm);
+        expansionKm = Number(company.resendExpansionKm);
+      }
+    }
+
     // Re-trigger matching (rejected drivers will be automatically excluded)
     this.matchingService.findAndNotifyDrivers(
       ride.id,
       Number(ride.pickupLat),
       Number(ride.pickupLng),
       ride.vehicleTypeId,
+      { maxRadiusKm, expansionKm }
     ).catch((error) => {
       console.error('Error resending ride to drivers:', error);
     });

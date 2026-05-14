@@ -9,6 +9,13 @@ interface DriverScore {
   distance: number;
 }
 
+export interface MatchingOptions {
+  maxRadiusKm?: number;
+  expansionKm?: number;
+  strategy?: 'ALL_IN_RANGE' | 'TOP_RANKED' | 'CUSTOM' | 'NEAREST';
+  targetDriverIds?: string[];
+}
+
 @Injectable()
 export class MatchingService {
   private readonly logger = new Logger(MatchingService.name);
@@ -30,17 +37,19 @@ export class MatchingService {
     pickupLat: number,
     pickupLng: number,
     vehicleTypeId: string,
+    options?: MatchingOptions,
   ): Promise<void> {
     this.logger.log(`🔍 Finding drivers for ride ${rideId} at (${pickupLat}, ${pickupLng})`);
     
-    // Load driver preferences from system settings
+    // Load driver preferences from system settings if not provided
     const minRating = Number(await this.getSystemSetting('min_driver_rating', 4.0));
-    const strategy = await this.getSystemSetting('matching_strategy', 'NEAREST');
+    const strategy = options?.strategy || await this.getSystemSetting('matching_strategy', 'NEAREST');
     const maxDrivers = Number(await this.getSystemSetting('matching_max_drivers', 5));
-    let maxRadius = Number(await this.getSystemSetting('matching_radius_km', 10));
+    let maxRadius = options?.maxRadiusKm || Number(await this.getSystemSetting('matching_radius_km', 10));
+    let expansionRadius = options?.expansionKm || 2;
     if (maxRadius < 1) maxRadius = 10;
 
-    let radius = 2; // Start with 2km radius
+    let radius = expansionRadius; // Start with expansion radius
     let drivers: any[] = [];
 
     // Expand search radius until we find drivers
@@ -48,11 +57,17 @@ export class MatchingService {
       drivers = await this.findNearbyDrivers(pickupLat, pickupLng, radius, vehicleTypeId, minRating);
       
       if (drivers.length === 0) {
-        radius += 2; // Expand by 2km
+        radius += expansionRadius; // Expand by expansion distance
         this.logger.log(`Expanding search radius to ${radius}km for ride ${rideId}`);
       } else {
         this.logger.log(`✅ Found ${drivers.length} drivers within ${radius}km`);
       }
+    }
+
+    // Filter by specific custom drivers if requested
+    if (strategy === 'CUSTOM' && options?.targetDriverIds && options.targetDriverIds.length > 0) {
+      drivers = drivers.filter(d => options.targetDriverIds!.includes(d.id));
+      this.logger.log(`🎯 Custom targeting applied: Found ${drivers.length} matched drivers from requested list.`);
     }
 
     if (drivers.length === 0) {
@@ -82,10 +97,11 @@ export class MatchingService {
     const rankedDrivers = this.rankDrivers(drivers, pickupLat, pickupLng);
     this.logger.log(`📊 Ranked ${rankedDrivers.length} drivers`);
 
-    // Apply strategy: NEAREST takes top N, ALL sends to all
-    const topDrivers = strategy === 'ALL'
-      ? rankedDrivers
-      : rankedDrivers.slice(0, maxDrivers);
+    // Apply strategy: NEAREST takes top N, ALL sends to all, TOP_RANKED takes top N based on high rank
+    let topDrivers = rankedDrivers;
+    if (strategy === 'NEAREST' || strategy === 'TOP_RANKED') {
+      topDrivers = rankedDrivers.slice(0, maxDrivers);
+    } // else ALL_IN_RANGE or CUSTOM keeps all
 
     // Create ride offers for top drivers
     await this.createRideOffers(rideId, topDrivers);

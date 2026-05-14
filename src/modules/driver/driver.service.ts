@@ -412,25 +412,13 @@ export class DriverService {
       data: { isOnTrip: false, totalTrips: { increment: 1 }, totalEarnings: { increment: driverShare } },
     });
 
-    // Credit driver wallet with net amount (after commission)
-    if (driver.user.wallet && driverShare > 0) {
+    // For CASH payments, the driver collects the full fare.
+    // The platform only deducts its commission from the driver's wallet.
+    if (driver.user.wallet && commissionAmount > 0) {
+      // Debit driver wallet for the commission amount
       await this.prisma.wallet.update({
         where: { id: driver.user.wallet.id },
-        data: { balance: { increment: driverShare } },
-      });
-
-      // Create driver earning transaction
-      await this.prisma.transaction.create({
-        data: {
-          walletId: driver.user.wallet.id,
-          userId: userId,
-          type: 'RIDE_PAYMENT',
-          amount: driverShare,
-          status: 'COMPLETED',
-          rideId: rideId,
-          description: `أجرة الرحلة ${ride.rideNumber}`,
-          descriptionAr: `أجرة الرحلة ${ride.rideNumber}`,
-        },
+        data: { balance: { decrement: commissionAmount } },
       });
 
       // Create commission deduction transaction

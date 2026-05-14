@@ -143,10 +143,7 @@ export class MatchingService {
         isOnline: true,
         isOnTrip: false,
         status: 'APPROVED',
-        OR: [
-          { rating: { gte: minRating } },
-          { rating: null }
-        ],
+        rating: { gte: minRating },
         vehicles: {
           some: {
             typeId: vehicleTypeId,

@@ -50,6 +50,12 @@ export class AdminController {
     return this.adminService.suspendDriver(id, reason);
   }
 
+  // Release driver from trip (when ride was deleted from DB)
+  @Post('drivers/:id/release')
+  async releaseDriver(@Param('id') id: string) {
+    return this.adminService.releaseDriver(id);
+  }
+
   // Check if customer exists by phone
   @Get('customer/check')
   async checkCustomer(@Query('phone') phone: string) {

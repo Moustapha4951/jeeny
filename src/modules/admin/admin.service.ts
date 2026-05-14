@@ -761,6 +761,18 @@ export class AdminService {
     };
   }
 
+  async releaseDriver(driverId: string) {
+    try {
+      await this.prisma.driver.update({
+        where: { id: driverId },
+        data: { isOnTrip: false },
+      });
+      return { success: true, message: 'تم تحرير السائق بنجاح' };
+    } catch (e) {
+      return { success: false, message: 'السائق غير موجود' };
+    }
+  }
+
   async cancelRide(id: string, reason?: string) {
     const ride = await this.prisma.ride.findUnique({
       where: { id },
@@ -820,6 +832,14 @@ export class AdminService {
     const resendableStatuses = ['NO_DRIVERS_FOUND', 'CANCELLED_BY_RIDER', 'CANCELLED_BY_DRIVER', 'SEARCHING'];
     if (!resendableStatuses.includes(ride.status)) {
       return { success: false, message: 'لا يمكن إعادة إرسال هذه الرحلة' };
+    }
+
+    // Release the old driver if there was one
+    if (ride.driverId) {
+      await this.prisma.driver.update({
+        where: { id: ride.driverId },
+        data: { isOnTrip: false },
+      }).catch(() => {});
     }
 
     // Reset ride status to SEARCHING

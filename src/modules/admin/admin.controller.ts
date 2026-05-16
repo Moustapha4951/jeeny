@@ -86,6 +86,12 @@ export class AdminController {
     return this.adminService.estimateFare(estimateData);
   }
 
+  // Fetch nearby drivers for custom dispatch selection
+  @Post('callcenter/drivers/nearby')
+  async getNearbyDrivers(@Body() requestData: any) {
+    return this.adminService.getNearbyDriversForCustomSelection(requestData);
+  }
+
   // Cancel ride endpoint (public for testing)
   @Post('rides/:id/cancel')
   async cancelRide(@Param('id') id: string, @Body() body: { reason?: string }) {

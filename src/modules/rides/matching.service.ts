@@ -111,7 +111,7 @@ export class MatchingService {
     this.logger.log(`📨 Sent notifications to ${topDrivers.length} drivers`);
   }
 
-  private async findNearbyDrivers(
+  async findNearbyDrivers(
     latitude: number,
     longitude: number,
     radiusKm: number,
@@ -200,7 +200,7 @@ export class MatchingService {
     return validDrivers;
   }
 
-  private rankDrivers(drivers: any[], pickupLat: number, pickupLng: number): DriverScore[] {
+  rankDrivers(drivers: any[], pickupLat: number, pickupLng: number): DriverScore[] {
     return drivers
       .map((driver) => {
         const distance = this.calculateDistance(

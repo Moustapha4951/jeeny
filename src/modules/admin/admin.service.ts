@@ -701,6 +701,45 @@ export class AdminService {
     };
   }
 
+  async getNearbyDriversForCustomSelection(requestData: any) {
+    const { pickupLat, pickupLng, vehicleTypeId, companyId } = requestData;
+    
+    let maxRadiusKm = 10;
+    if (companyId) {
+      const company = await this.prisma.company.findUnique({ where: { id: companyId } });
+      if (company && company.canConfigureDispatch) {
+        maxRadiusKm = Number(company.dispatchRadiusKm);
+      }
+    }
+
+    const drivers = await this.matchingService.findNearbyDrivers(
+      pickupLat,
+      pickupLng,
+      maxRadiusKm,
+      vehicleTypeId,
+      0 // min rating 0
+    );
+
+    const rankedDrivers = this.matchingService.rankDrivers(drivers, pickupLat, pickupLng);
+
+    const driversData = rankedDrivers.map(rd => {
+      const driver = drivers.find(d => d.id === rd.driverId);
+      return {
+        id: driver.id,
+        name: driver.user ? `${driver.user.firstName} ${driver.user.lastName}`.trim() : 'سائق',
+        phone: driver.user?.phone || '',
+        rating: driver.rating ? Number(driver.rating) : 5.0,
+        distance: rd.distance,
+        score: rd.score,
+      };
+    });
+
+    return {
+      success: true,
+      drivers: driversData,
+    };
+  }
+
   async estimateFare(estimateData: any) {
     const { pickupLat, pickupLng, dropoffLat, dropoffLng, distanceKm, durationMin, vehicleTypeId } = estimateData;
 

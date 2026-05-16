@@ -52,7 +52,10 @@ export class MatchingService {
     let expansionRadius = options?.expansionKm || 2;
     if (maxRadius < 1) maxRadius = 10;
 
-    let radius = expansionRadius; // Start with expansion radius
+    let radius = (strategy === 'ALL_IN_RANGE' || strategy === 'CUSTOM') 
+      ? maxRadius 
+      : Math.min(expansionRadius, maxRadius); // Start with expansion radius or max
+
     let drivers: any[] = [];
 
     // Expand search radius until we find drivers
@@ -60,7 +63,8 @@ export class MatchingService {
       drivers = await this.findNearbyDrivers(pickupLat, pickupLng, radius, vehicleTypeId, minRating);
       
       if (drivers.length === 0) {
-        radius += expansionRadius; // Expand by expansion distance
+        if (radius === maxRadius) break; // Reached max
+        radius = Math.min(radius + expansionRadius, maxRadius); // Expand by expansion distance up to max
         this.logger.log(`Expanding search radius to ${radius}km for ride ${rideId}`);
       } else {
         this.logger.log(`✅ Found ${drivers.length} drivers within ${radius}km`);

@@ -63,6 +63,7 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
       this.driverSockets.set(driver.id, client.id);
       client.data.driverId = driver.id;
       client.data.userId = userId;
+      client.join(driver.id); // Join room for targeted events
 
       console.log(`✅ Driver ${driver.id} (user: ${userId}) connected via WebSocket`);
 

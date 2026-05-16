@@ -16,6 +16,8 @@ export interface MatchingOptions {
   targetDriverIds?: string[];
 }
 
+import { DriverGateway } from '../driver/driver.gateway';
+
 @Injectable()
 export class MatchingService {
   private readonly logger = new Logger(MatchingService.name);
@@ -25,6 +27,7 @@ export class MatchingService {
     private prisma: PrismaService,
     private locationService: LocationService,
     private firebase: FirebaseService,
+    private driverGateway: DriverGateway,
   ) {}
 
   private async getSystemSetting(key: string, defaultValue: any): Promise<any> {
@@ -276,26 +279,47 @@ export class MatchingService {
 
         if (driverRecord?.user?.fcmToken) {
           try {
+            const payload = {
+              type: 'RIDE_OFFER',
+              rideId: ride.id,
+              distance: driver.distance.toFixed(2),
+              pickupAddress: ride.pickupAddress,
+              dropoffAddress: ride.dropoffAddress,
+              pickupLat: ride.pickupLat.toString(),
+              pickupLng: ride.pickupLng.toString(),
+              dropoffLat: ride.dropoffLat.toString(),
+              dropoffLng: ride.dropoffLng.toString(),
+              estimatedFare: ride.estimatedFare.toString(),
+            };
+
             await this.firebase.sendNotification(
               driverRecord.user.fcmToken,
               'طلب رحلة جديد',
               `نقطة الانطلاق: ${ride.pickupAddress}`,
-              {
-                type: 'RIDE_OFFER',
-                rideId: ride.id,
-                distance: driver.distance.toFixed(2),
-                pickupAddress: ride.pickupAddress,
-                dropoffAddress: ride.dropoffAddress,
-                pickupLat: ride.pickupLat.toString(),
-                pickupLng: ride.pickupLng.toString(),
-                dropoffLat: ride.dropoffLat.toString(),
-                dropoffLng: ride.dropoffLng.toString(),
-                estimatedFare: ride.estimatedFare.toString(),
-              },
+              payload
             );
+
+            // Also send via WebSocket directly for faster real-time delivery
+            this.driverGateway.server.to(driver.driverId).emit('ride_offer', payload);
+
           } catch (error) {
             this.logger.error(`Failed to send notification to driver ${driver.driverId}:`, error);
           }
+        } else {
+          // If no FCM token, at least try WebSocket
+          const payload = {
+            type: 'RIDE_OFFER',
+            rideId: ride.id,
+            distance: driver.distance.toFixed(2),
+            pickupAddress: ride.pickupAddress,
+            dropoffAddress: ride.dropoffAddress,
+            pickupLat: ride.pickupLat.toString(),
+            pickupLng: ride.pickupLng.toString(),
+            dropoffLat: ride.dropoffLat.toString(),
+            dropoffLng: ride.dropoffLng.toString(),
+            estimatedFare: ride.estimatedFare.toString(),
+          };
+          this.driverGateway.server.to(driver.driverId).emit('ride_offer', payload);
         }
       }),
     );

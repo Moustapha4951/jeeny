@@ -433,6 +433,21 @@ export class AdminService {
     return { exists: false };
   }
 
+  async searchPlaces(query: string) {
+    if (!query || query.trim().length < 2) return [];
+    
+    return this.prisma.place.findMany({
+      where: {
+        isActive: true,
+        OR: [
+          { name: { contains: query, mode: 'insensitive' } },
+          { description: { contains: query, mode: 'insensitive' } },
+        ],
+      },
+      take: 20,
+    });
+  }
+
   async getVehicleTypes() {
     const vehicleTypes = await this.prisma.vehicleType.findMany({
       orderBy: {

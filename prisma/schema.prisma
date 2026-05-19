@@ -2137,3 +2137,22 @@ model EmployeePermission {
   @@unique([employeeId, permission])
   @@index([employeeId])
 }
+
+// ----- Places (Custom POIs) -----
+
+model Place {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  latitude    Float
+  longitude   Float
+  cityId      String
+  category    String?
+  metadata    Json?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([cityId])
+  @@index([isActive])
+}

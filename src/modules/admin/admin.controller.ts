@@ -62,6 +62,12 @@ export class AdminController {
     return this.adminService.checkCustomerByPhone(phone);
   }
 
+  // Search places
+  @Get('places/search')
+  async searchPlaces(@Query('q') query: string) {
+    return this.adminService.searchPlaces(query);
+  }
+
   // Get all vehicle types
   @Get('vehicle-types')
   async getVehicleTypes() {

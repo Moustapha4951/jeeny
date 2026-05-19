@@ -59,17 +59,16 @@ export class FirebaseService implements OnModuleInit {
         android: {
           priority: 'high',
           notification: {
-            channelId: 'jeeny_driver_channel',
+            channelId: 'masar_driver_channel_v2', // Updated channel ID
             priority: 'high',
-            sound: 'default',
-            defaultSound: true,
+            sound: 'masar_notification.mp3', // Custom sound
             defaultVibrateTimings: true,
           },
         },
         apns: {
           payload: {
             aps: {
-              sound: 'default',
+              sound: 'masar_notification.mp3', // Custom sound for iOS
               badge: 1,
             },
           },

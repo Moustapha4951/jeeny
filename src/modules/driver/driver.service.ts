@@ -126,6 +126,25 @@ export class DriverService {
           'Please complete and get approval for all required documents',
         );
       }
+
+      // 4. Check for expired documents
+      const expiredDocs = approvedDocs.filter(doc => doc.expiresAt && new Date(doc.expiresAt) < new Date());
+      if (expiredDocs.length > 0) {
+        throw new BadRequestException(
+          'One or more required documents have expired. Please update them.',
+        );
+      }
+      
+      // 5. Check Vehicle status and expiry
+      const vehicle = await this.prisma.vehicle.findFirst({
+        where: { driverId: driver.id },
+      });
+      if (!vehicle || vehicle.status !== 'APPROVED') {
+        throw new BadRequestException('Your vehicle is not approved yet.');
+      }
+      if (vehicle.registrationExpiry && new Date(vehicle.registrationExpiry) < new Date()) {
+        throw new BadRequestException('Your vehicle registration has expired. Please update it.');
+      }
     }
 
     // Update driver online status

@@ -2156,3 +2156,26 @@ model Place {
   @@index([cityId])
   @@index([isActive])
 }
+
+// ----- Account Deletion -----
+
+enum DeletionStatus {
+  PENDING
+  COMPLETED
+  CANCELLED
+}
+
+model AccountDeletionRequest {
+  id          String         @id @default(uuid())
+  userId      String
+  phoneNumber String
+  reason      String?
+  status      DeletionStatus @default(PENDING)
+  requestedAt DateTime       @default(now())
+  completedAt DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@index([phoneNumber])
+  @@index([status])
+}

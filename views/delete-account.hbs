@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>حذف الحساب - Delete Account | Masar Driver</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 600px;
+            width: 100%;
+            padding: 40px;
+        }
+        
+        .logo {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .logo h1 {
+            color: #178748;
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+        
+        .logo p {
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .content {
+            margin-bottom: 30px;
+        }
+        
+        .content h2 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 24px;
+        }
+        
+        .content p {
+            color: #666;
+            line-height: 1.8;
+            margin-bottom: 15px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            color: #333;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #178748;
+        }
+        
+        .form-group textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+        
+        .btn {
+            background: #178748;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            transition: background 0.3s;
+        }
+        
+        .btn:hover {
+            background: #136639;
+        }
+        
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .alert {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        
+        .alert.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .alert.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .info-box {
+            background: #e7f3ff;
+            border-left: 4px solid #2196F3;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+        
+        .info-box h3 {
+            color: #1976D2;
+            margin-bottom: 10px;
+            font-size: 18px;
+        }
+        
+        .info-box ul {
+            margin-right: 20px;
+            color: #555;
+        }
+        
+        .info-box li {
+            margin-bottom: 8px;
+        }
+        
+        .lang-switch {
+            text-align: center;
+            margin-top: 20px;
+        }
+        
+        .lang-switch button {
+            background: none;
+            border: none;
+            color: #178748;
+            cursor: pointer;
+            text-decoration: underline;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">
+            <h1>🚗 مسار - Masar Driver</h1>
+            <p>حذف الحساب - Account Deletion</p>
+        </div>
+        
+        <div id="alert" class="alert"></div>
+        
+        <div class="content">
+            <h2>حذف الحساب - Delete Account</h2>
+            
+            <div class="info-box">
+                <h3>⚠️ معلومات مهمة - Important Information</h3>
+                <ul>
+                    <li>سيتم حذف جميع بياناتك بشكل نهائي - All your data will be permanently deleted</li>
+                    <li>لن تتمكن من استرجاع حسابك - You won't be able to recover your account</li>
+                    <li>سيتم حذف الحساب خلال 30 يوماً - Account will be deleted within 30 days</li>
+                    <li>يمكنك إلغاء الطلب خلال 7 أيام - You can cancel within 7 days</li>
+                </ul>
+            </div>
+            
+            <form id="deleteForm">
+                <div class="form-group">
+                    <label for="phoneNumber">رقم الهاتف - Phone Number *</label>
+                    <input 
+                        type="tel" 
+                        id="phoneNumber" 
+                        name="phoneNumber" 
+                        placeholder="+222XXXXXXXX" 
+                        required
+                        pattern="^\+222\d{8}$"
+                    >
+                </div>
+                
+                <div class="form-group">
+                    <label for="reason">السبب (اختياري) - Reason (Optional)</label>
+                    <textarea 
+                        id="reason" 
+                        name="reason" 
+                        placeholder="لماذا تريد حذف حسابك؟ - Why do you want to delete your account?"
+                    ></textarea>
+                </div>
+                
+                <button type="submit" class="btn" id="submitBtn">
+                    طلب حذف الحساب - Request Account Deletion
+                </button>
+            </form>
+        </div>
+        
+        <div class="lang-switch">
+            <p style="color: #666; font-size: 14px;">
+                للمساعدة، تواصل معنا - For help, contact us:<br>
+                <a href="mailto:support@masarapp.mr" style="color: #178748;">support@masarapp.mr</a>
+            </p>
+        </div>
+    </div>
+    
+    <script>
+        document.getElementById('deleteForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const submitBtn = document.getElementById('submitBtn');
+            const alert = document.getElementById('alert');
+            const phoneNumber = document.getElementById('phoneNumber').value;
+            const reason = document.getElementById('reason').value;
+            
+            // Disable button
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'جاري الإرسال... - Sending...';
+            
+            try {
+                const response = await fetch('/delete-account/request', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ phoneNumber, reason }),
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert.className = 'alert success';
+                    alert.style.display = 'block';
+                    alert.textContent = data.message;
+                    document.getElementById('deleteForm').reset();
+                } else {
+                    alert.className = 'alert error';
+                    alert.style.display = 'block';
+                    alert.textContent = data.message;
+                }
+            } catch (error) {
+                alert.className = 'alert error';
+                alert.style.display = 'block';
+                alert.textContent = 'حدث خطأ. يرجى المحاولة مرة أخرى - An error occurred. Please try again';
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'طلب حذف الحساب - Request Account Deletion';
+            }
+        });
+    </script>
+</body>
+</html>

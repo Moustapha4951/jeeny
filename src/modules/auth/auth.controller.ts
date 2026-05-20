@@ -42,8 +42,23 @@ export class AuthController {
   @Post('verify-otp')
   @HttpCode(HttpStatus.OK)
   async verifyOtp(@Body() verifyOtpDto: VerifyOtpDto): Promise<AuthResponseDto> {
-    // Verify OTP
-    await this.otpService.verifyOTP(verifyOtpDto.phoneNumber, verifyOtpDto.otp);
+    // Check if Firebase ID token is provided (new Firebase Phone Auth)
+    if (verifyOtpDto.firebaseIdToken) {
+      // Verify Firebase ID token
+      try {
+        const decodedToken = await this.jwtAuthService.verifyFirebaseToken(verifyOtpDto.firebaseIdToken);
+        
+        // Ensure phone number matches
+        if (decodedToken.phone_number !== verifyOtpDto.phoneNumber) {
+          throw new Error('Phone number mismatch');
+        }
+      } catch (error) {
+        throw new Error('Invalid Firebase token');
+      }
+    } else {
+      // Fallback to old OTP verification (for backward compatibility)
+      await this.otpService.verifyOTP(verifyOtpDto.phoneNumber, verifyOtpDto.otp);
+    }
 
     // Find or create user with relations
     let user = await this.prisma.user.findUnique({

@@ -2,6 +2,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService as NestJwtService } from '@nestjs/jwt';
 import { PrismaService } from '../../prisma/prisma.service';
+import * as admin from 'firebase-admin';
 
 export interface JwtPayload {
   userId: string;
@@ -146,5 +147,14 @@ export class JwtAuthService {
       where: { userId },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  async verifyFirebaseToken(idToken: string): Promise<admin.auth.DecodedIdToken> {
+    try {
+      const decodedToken = await admin.auth().verifyIdToken(idToken);
+      return decodedToken;
+    } catch (error) {
+      throw new UnauthorizedException('Invalid Firebase token');
+    }
   }
 }

@@ -21,4 +21,8 @@ export class VerifyOtpDto {
   @IsString()
   @IsOptional()
   fcmToken?: string;
+
+  @IsString()
+  @IsOptional()
+  firebaseIdToken?: string;
 }

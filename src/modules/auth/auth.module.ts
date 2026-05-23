@@ -2,9 +2,11 @@ import { Module, Global } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
+import { HttpModule } from '@nestjs/axios';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { AuthController } from './auth.controller';
 import { OtpService } from './otp.service';
+import { MoorsylService } from './moorsyl.service';
 import { JwtAuthService } from './jwt.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -15,6 +17,7 @@ import { RolesGuard } from './guards/roles.guard';
   imports: [
     ConfigModule,
     PrismaModule,
+    HttpModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -28,7 +31,7 @@ import { RolesGuard } from './guards/roles.guard';
     }),
   ],
   controllers: [AuthController],
-  providers: [OtpService, JwtAuthService, JwtStrategy, JwtAuthGuard, RolesGuard],
+  providers: [OtpService, MoorsylService, JwtAuthService, JwtStrategy, JwtAuthGuard, RolesGuard],
   exports: [OtpService, JwtAuthService, JwtAuthGuard, RolesGuard, PassportModule],
 })
 export class AuthModule {}

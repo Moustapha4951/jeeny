@@ -1,6 +1,7 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { FirebaseService } from '../../firebase/firebase.service';
+import { MoorsylService } from './moorsyl.service';
 
 @Injectable()
 export class OtpService {
@@ -12,6 +13,7 @@ export class OtpService {
   constructor(
     private prisma: PrismaService,
     private firebase: FirebaseService,
+    private moorsyl: MoorsylService,
   ) {}
 
   generateOTP(): string {
@@ -55,15 +57,16 @@ export class OtpService {
       },
     });
 
-    // Send OTP via SMS (using Firebase or SMS gateway)
+    // Send OTP via Moorsyl SMS (works with all Mauritanian carriers)
     try {
-      // For development: Log OTP to console
-      this.logger.warn(`🔐 OTP for ${phoneNumber}: ${otp} (DEV MODE - Remove in production!)`);
+      // Send SMS via Moorsyl
+      const messageId = await this.moorsyl.sendOTP(phoneNumber, otp);
+      this.logger.log(`OTP sent via Moorsyl. Message ID: ${messageId}`);
       
-      // TODO: Integrate with SMS gateway for production
-      // await this.sendSMS(phoneNumber, `Your Jeeny verification code is: ${otp}`);
+      // DEV MODE: Also log to console
+      this.logger.warn(`🔐 OTP for ${phoneNumber}: ${otp} (expires in ${this.OTP_EXPIRY_MINUTES} minutes)`);
     } catch (error) {
-      this.logger.error('Failed to send OTP:', error);
+      this.logger.error('Failed to send OTP via Moorsyl:', error);
       throw new BadRequestException('Failed to send OTP. Please try again.');
     }
   }

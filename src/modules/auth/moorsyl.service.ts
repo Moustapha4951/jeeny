@@ -21,7 +21,7 @@ interface MoorsylStatusResponse {
 @Injectable()
 export class MoorsylService {
   private readonly logger = new Logger(MoorsylService.name);
-  private readonly apiKey = process.env.MOORSYL_API_KEY || 'pk_fukwCPnBNyIWtUHBYGAHAyGVVDDnwpSkuXDILFbaMnRGbncXtmwxUNYqfzvbyxkh';
+  private readonly apiKey = process.env.MOORSYL_API_KEY || 'sk_bSGJDRPlgZDaUWBHVQqqESJNzZwzIzBPGjLEYbpNPsdSngnvInFkMHlXhaKvCcIx';
   private readonly baseUrl = 'https://api.moorsyl.com/api';
 
   constructor(private readonly httpService: HttpService) {}

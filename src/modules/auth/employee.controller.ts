@@ -130,8 +130,35 @@ export class EmployeeController {
   @Post('book-ride')
   @UseGuards(JwtAuthGuard)
   async bookRide(@Request() req: any, @Body() body: any) {
-    await this.assertEmployee(req.user.id);
-    return this.adminBookingService.bookRideForCustomer(body);
+    const employee = await this.assertEmployee(req.user.id);
+    const result = await this.adminBookingService.bookRideForCustomer(body);
+    // Record this booking against the employee so it appears in their
+    // "rides" list later. We don't fail if the row insert fails — the
+    // ride itself is already created.
+    try {
+      const rideId = (result as any)?.ride?.id || (result as any)?.rideId;
+      if (rideId && body.vehicleTypeId) {
+        await this.prisma.callCenterBooking.create({
+          data: {
+            rideId,
+            employeeId: employee.id,
+            customerPhone: body.customerPhone,
+            customerName: body.customerName ?? null,
+            pickupLat: body.pickupLat,
+            pickupLng: body.pickupLng,
+            pickupAddress: body.pickupAddress,
+            dropoffLat: body.dropoffLat ?? null,
+            dropoffLng: body.dropoffLng ?? null,
+            dropoffAddress: body.dropoffAddress ?? null,
+            vehicleTypeId: body.vehicleTypeId,
+            driverNotes: body.driverNotes ?? null,
+          },
+        });
+      }
+    } catch (e) {
+      // ignore — booking record is best-effort
+    }
+    return result;
   }
 
   @Post('estimate-fare')
@@ -146,6 +173,59 @@ export class EmployeeController {
   async nearbyDrivers(@Request() req: any, @Body() body: any) {
     await this.assertEmployee(req.user.id);
     return this.adminBookingService.getNearbyDriversForCustomSelection(body);
+  }
+
+  @Get('rides')
+  @UseGuards(JwtAuthGuard)
+  async myRides(@Request() req: any) {
+    const employee = await this.assertEmployee(req.user.id);
+    // Pull every CallCenterBooking that this employee created and join the
+    // ride alongside so the app can show pickup/dropoff/status nicely.
+    const bookings = await this.prisma.callCenterBooking.findMany({
+      where: { employeeId: employee.id },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      include: {
+        ride: {
+          include: {
+            driver: {
+              include: {
+                user: {
+                  select: {
+                    firstName: true,
+                    lastName: true,
+                    phone: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+    const rides = bookings
+      .filter((b) => b.ride !== null)
+      .map((b) => ({
+        id: b.ride!.id,
+        rideNumber: b.ride!.rideNumber,
+        status: b.ride!.status,
+        pickupAddress: b.ride!.pickupAddress,
+        dropoffAddress: b.ride!.dropoffAddress,
+        estimatedFare: b.ride!.estimatedFare,
+        finalFare: b.ride!.finalFare,
+        createdAt: b.ride!.createdAt,
+        completedAt: b.ride!.completedAt,
+        customerName: b.customerName,
+        customerPhone: b.customerPhone,
+        driver: b.ride!.driver
+          ? {
+              firstName: b.ride!.driver.user.firstName,
+              lastName: b.ride!.driver.user.lastName,
+              phone: b.ride!.driver.user.phone,
+            }
+          : null,
+      }));
+    return { rides };
   }
 
   // ─── Recharge queue ─────────────────────────────────────────────────────

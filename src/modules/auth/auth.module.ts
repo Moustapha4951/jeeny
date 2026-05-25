@@ -13,6 +13,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { DriverModule } from '../driver/driver.module';
+import { AdminModule } from '../admin/admin.module';
 
 @Global()
 @Module({
@@ -32,6 +33,7 @@ import { DriverModule } from '../driver/driver.module';
       inject: [ConfigService],
     }),
     forwardRef(() => DriverModule),
+    forwardRef(() => AdminModule),
   ],
   controllers: [AuthController, EmployeeController],
   providers: [OtpService, MoorsylService, JwtAuthService, JwtStrategy, JwtAuthGuard, RolesGuard],

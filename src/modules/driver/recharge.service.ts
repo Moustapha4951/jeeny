@@ -11,6 +11,7 @@ import {
   RechargeRequestStatus,
 } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { FirebaseService } from '../../firebase/firebase.service';
 
 /**
  * Driver wallet recharge / top-up flow.
@@ -36,7 +37,10 @@ export class RechargeService {
     MASRVI: '24212422',
   };
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly firebase: FirebaseService,
+  ) {}
 
   // ─── Driver-facing API ──────────────────────────────────────────────────
 
@@ -110,6 +114,13 @@ export class RechargeService {
         },
       ],
     });
+
+    // Notify FINANCE / OPERATIONS employees that a fresh request landed.
+    await this.pushToEmployee(
+      request.id,
+      'طلب شحن جديد',
+      `طلب جديد بقيمة ${amount.toFixed(0)} MRU`,
+    );
 
     return this.findOneForDriver(driverUserId, request.id);
   }
@@ -218,6 +229,12 @@ export class RechargeService {
         data: { status: 'AWAITING_REVIEW' },
       });
     }
+    // Push to the employee side so they hear about the new message.
+    await this.pushToEmployee(
+      request.id,
+      'رسالة من سائق',
+      imageUrl ? 'أرسل لقطة شاشة للتحويل' : (body ?? ''),
+    );
     return message;
   }
 
@@ -319,7 +336,7 @@ export class RechargeService {
         data: { assignedEmployeeId: employeeId },
       });
     }
-    return this.prisma.rechargeMessage.create({
+    const message = await this.prisma.rechargeMessage.create({
       data: {
         requestId: request.id,
         sender: 'EMPLOYEE',
@@ -329,6 +346,12 @@ export class RechargeService {
         imageUrl,
       },
     });
+    await this.pushToDriver(
+      request.id,
+      'رد من مسار',
+      imageUrl ? 'صورة جديدة' : (body ?? ''),
+    );
+    return message;
   }
 
   /**
@@ -390,6 +413,13 @@ export class RechargeService {
       });
     });
 
+    // Push to driver — this should buzz them like a balance update.
+    await this.pushToDriver(
+      requestId,
+      'تم اعتماد الشحن ✅',
+      `أُضيف ${amount.toFixed(0)} MRU إلى محفظتك`,
+    );
+
     return this.findOneForEmployee(requestId);
   }
 
@@ -418,6 +448,11 @@ export class RechargeService {
         metadata: { status: 'REJECTED', reason },
       },
     });
+    await this.pushToDriver(
+      requestId,
+      'تم رفض طلب الشحن',
+      reason || 'الرجاء التواصل لمعرفة السبب',
+    );
     return this.findOneForEmployee(requestId);
   }
 
@@ -431,6 +466,85 @@ export class RechargeService {
         return 'سداد';
       case 'MASRVI':
         return 'مصرفي';
+    }
+  }
+
+  /**
+   * Push the given title/body to the driver who owns the request and to
+   * any employee already assigned to it. We swallow errors so a missing
+   * FCM token never blocks the actual chat operation.
+   */
+  private async pushToDriver(
+    requestId: string,
+    title: string,
+    body: string,
+    extra: Record<string, string> = {},
+  ) {
+    try {
+      const request = await this.prisma.rechargeRequest.findUnique({
+        where: { id: requestId },
+        include: {
+          driver: { include: { user: { select: { fcmToken: true } } } },
+        },
+      });
+      const token = request?.driver?.user?.fcmToken;
+      if (!token) return;
+      await this.firebase.sendNotification(token, title, body, {
+        type: 'RECHARGE_MESSAGE',
+        requestId,
+        ...extra,
+      });
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  private async pushToEmployee(
+    requestId: string,
+    title: string,
+    body: string,
+    extra: Record<string, string> = {},
+  ) {
+    try {
+      const request = await this.prisma.rechargeRequest.findUnique({
+        where: { id: requestId },
+        include: {
+          assignedEmployee: {
+            include: { user: { select: { fcmToken: true } } },
+          },
+        },
+      });
+      const tokens: string[] = [];
+      const direct = request?.assignedEmployee?.user?.fcmToken;
+      if (direct) tokens.push(direct);
+      // If unassigned, fan out to any FINANCE / OPERATIONS employee with a
+      // token so somebody picks it up.
+      if (!direct) {
+        const candidates = await this.prisma.employee.findMany({
+          where: {
+            role: { in: ['FINANCE', 'OPERATIONS'] },
+            user: { fcmToken: { not: null } },
+          },
+          include: { user: { select: { fcmToken: true } } },
+        });
+        for (const c of candidates) {
+          if (c.user.fcmToken) tokens.push(c.user.fcmToken);
+        }
+      }
+      if (tokens.length === 0) return;
+      const data: Record<string, string> = {
+        type: 'RECHARGE_MESSAGE',
+        requestId,
+        ...extra,
+      };
+      // sendMulticast lives on FirebaseService; use it when we have >1 token
+      if (tokens.length === 1) {
+        await this.firebase.sendNotification(tokens[0], title, body, data);
+      } else {
+        await this.firebase.sendMulticast(tokens, title, body, data);
+      }
+    } catch (e) {
+      // ignore
     }
   }
 }

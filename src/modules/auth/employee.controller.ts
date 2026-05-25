@@ -16,6 +16,7 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { JwtAuthService } from './jwt.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RechargeService } from '../driver/recharge.service';
+import { AdminService } from '../admin/admin.service';
 import { RechargeRequestStatus } from '@prisma/client';
 
 /**
@@ -33,6 +34,7 @@ export class EmployeeController {
     private readonly prisma: PrismaService,
     private readonly jwtAuthService: JwtAuthService,
     private readonly rechargeService: RechargeService,
+    private readonly adminBookingService: AdminService,
   ) {}
 
   // ─── Login ──────────────────────────────────────────────────────────────
@@ -104,6 +106,46 @@ export class EmployeeController {
       department: user.employee.department,
       employeeId: user.employee.employeeId,
     };
+  }
+
+  @Post('fcm-token')
+  @UseGuards(JwtAuthGuard)
+  async updateFcmToken(
+    @Request() req: any,
+    @Body() body: { fcmToken: string },
+  ) {
+    await this.assertEmployee(req.user.id);
+    if (!body.fcmToken) {
+      throw new BadRequestException('fcmToken is required');
+    }
+    await this.prisma.user.update({
+      where: { id: req.user.id },
+      data: { fcmToken: body.fcmToken },
+    });
+    return { success: true };
+  }
+
+  // ─── Booking (call-center style) ───────────────────────────────────────
+
+  @Post('book-ride')
+  @UseGuards(JwtAuthGuard)
+  async bookRide(@Request() req: any, @Body() body: any) {
+    await this.assertEmployee(req.user.id);
+    return this.adminBookingService.bookRideForCustomer(body);
+  }
+
+  @Post('estimate-fare')
+  @UseGuards(JwtAuthGuard)
+  async estimateFare(@Request() req: any, @Body() body: any) {
+    await this.assertEmployee(req.user.id);
+    return this.adminBookingService.estimateFare(body);
+  }
+
+  @Post('drivers/nearby')
+  @UseGuards(JwtAuthGuard)
+  async nearbyDrivers(@Request() req: any, @Body() body: any) {
+    await this.assertEmployee(req.user.id);
+    return this.adminBookingService.getNearbyDriversForCustomSelection(body);
   }
 
   // ─── Recharge queue ─────────────────────────────────────────────────────

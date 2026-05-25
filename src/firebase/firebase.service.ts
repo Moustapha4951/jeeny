@@ -91,7 +91,7 @@ export class FirebaseService implements OnModuleInit {
             android: {
               priority: 'high',
               notification: {
-                channelId: 'masar_driver_channel_v2',
+                channelId: 'masar_driver_channel_v3',
                 priority: 'high',
                 sound: 'masar_notification',
                 defaultVibrateTimings: true,

@@ -232,4 +232,47 @@ export class DriverController {
   ) {
     return this.driverService.registerVehicle(req.user.id, body);
   }
+
+  @Get('ranking')
+  async getRanking(@Request() req: any) {
+    const me = await this.prisma.driver.findUnique({
+      where: { userId: req.user.id },
+      select: { id: true, totalTrips: true, rating: true },
+    });
+    if (!me) {
+      return {
+        rank: null,
+        totalDrivers: 0,
+        myTotalTrips: 0,
+        myRating: 0,
+      };
+    }
+
+    // Count drivers with more trips than me (or same trips + higher rating)
+    const ahead = await this.prisma.driver.count({
+      where: {
+        status: 'APPROVED',
+        OR: [
+          { totalTrips: { gt: me.totalTrips } },
+          {
+            AND: [
+              { totalTrips: me.totalTrips },
+              { rating: { gt: me.rating } },
+            ],
+          },
+        ],
+      },
+    });
+
+    const totalDrivers = await this.prisma.driver.count({
+      where: { status: 'APPROVED' },
+    });
+
+    return {
+      rank: ahead + 1,
+      totalDrivers,
+      myTotalTrips: me.totalTrips,
+      myRating: me.rating,
+    };
+  }
 }

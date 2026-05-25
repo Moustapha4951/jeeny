@@ -4,6 +4,7 @@ import { DriverController } from './driver.controller';
 import { DriverService } from './driver.service';
 import { DriverGateway } from './driver.gateway';
 import { LocationService } from './location.service';
+import { AssignmentsService } from './assignments.service';
 import { PrismaModule } from '../../prisma/prisma.module';
 
 @Module({
@@ -15,7 +16,7 @@ import { PrismaModule } from '../../prisma/prisma.module';
     }),
   ],
   controllers: [DriverController],
-  providers: [DriverService, DriverGateway, LocationService],
-  exports: [DriverService, DriverGateway, LocationService],
+  providers: [DriverService, DriverGateway, LocationService, AssignmentsService],
+  exports: [DriverService, DriverGateway, LocationService, AssignmentsService],
 })
 export class DriverModule {}

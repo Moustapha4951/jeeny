@@ -1,8 +1,9 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, forwardRef, Inject } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { DriverGateway } from './driver.gateway';
 import { UploadDocumentDto, DocumentType } from './dto/upload-document.dto';
 import { LocationService } from './location.service';
+import { AssignmentsService } from './assignments.service';
 
 @Injectable()
 export class DriverService {
@@ -10,6 +11,8 @@ export class DriverService {
     private prisma: PrismaService,
     private locationService: LocationService,
     private driverGateway: DriverGateway,
+    @Inject(forwardRef(() => AssignmentsService))
+    private assignmentsService: AssignmentsService,
   ) {}
 
   async getProfile(userId: string) {
@@ -466,6 +469,23 @@ export class DriverService {
     await this.driverGateway.sendDriverUpdate(userId);
 
     console.log(`✅ Ride ${rideId} completed by driver ${driver.id}, earned ${driverShare} MRU (commission: ${commissionAmount} MRU at ${adminCommissionPercent}%)`);
+
+    // Update assignment progress (rides + earnings + duration)
+    try {
+      const startedAt = updatedRide.startedAt ?? updatedRide.acceptedAt ?? updatedRide.createdAt;
+      const completedAt = updatedRide.completedAt ?? new Date();
+      const durationMinutes = Math.max(
+        1,
+        Math.round((completedAt.getTime() - startedAt.getTime()) / 60000),
+      );
+      await this.assignmentsService.onRideCompleted({
+        driverId: driver.id,
+        fareAmount: driverShare,
+        durationMinutes,
+      });
+    } catch (e) {
+      console.error('Failed to update assignment progress:', e);
+    }
 
     return { success: true, ride: updatedRide, driverShare };
   }

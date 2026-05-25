@@ -1,12 +1,16 @@
-import { Controller, Get, Post, Put, Delete, Param, Body, UseGuards, Query } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Param, Body, UseGuards, Query, Request } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { AdminService } from './admin.service';
+import { AssignmentsService, CreateAssignmentDto } from '../driver/assignments.service';
 
 @Controller('admin')
 export class AdminController {
-  constructor(private adminService: AdminService) {}
+  constructor(
+    private adminService: AdminService,
+    private assignmentsService: AssignmentsService,
+  ) {}
 
   // Public endpoint for testing
   @Get('dashboard')
@@ -231,5 +235,32 @@ export class AdminController {
   @Post('seed/employer')
   async seedEmployer() {
     return this.adminService.seedEmployerAccount();
+  }
+
+  // ===== Driver Assignments / Challenges =====
+  @Get('assignments')
+  async listAssignments() {
+    return this.assignmentsService.listForAdmin();
+  }
+
+  @Post('assignments')
+  async createAssignment(
+    @Request() req: any,
+    @Body() dto: CreateAssignmentDto,
+  ) {
+    return this.assignmentsService.create(req.user?.id ?? 'system', dto);
+  }
+
+  @Put('assignments/:id')
+  async updateAssignment(
+    @Param('id') id: string,
+    @Body() dto: Partial<CreateAssignmentDto>,
+  ) {
+    return this.assignmentsService.update(id, dto);
+  }
+
+  @Delete('assignments/:id')
+  async archiveAssignment(@Param('id') id: string) {
+    return this.assignmentsService.archive(id);
   }
 }

@@ -8,6 +8,7 @@ import {
   Request,
 } from '@nestjs/common';
 import { DriverService } from './driver.service';
+import { AssignmentsService } from './assignments.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -19,6 +20,7 @@ import { UploadDocumentDto } from './dto/upload-document.dto';
 export class DriverController {
   constructor(
     private readonly driverService: DriverService,
+    private readonly assignmentsService: AssignmentsService,
     private readonly prisma: PrismaService,
   ) {}
 
@@ -237,7 +239,12 @@ export class DriverController {
   async getRanking(@Request() req: any) {
     const me = await this.prisma.driver.findUnique({
       where: { userId: req.user.id },
-      select: { id: true, totalTrips: true, rating: true },
+      select: {
+        id: true,
+        totalTrips: true,
+        rating: true,
+        user: { select: { firstName: true, lastName: true, avatar: true } },
+      },
     });
     if (!me) {
       return {
@@ -245,10 +252,11 @@ export class DriverController {
         totalDrivers: 0,
         myTotalTrips: 0,
         myRating: 0,
+        leaderboard: [],
       };
     }
 
-    // Count drivers with more trips than me (or same trips + higher rating)
+    // Drivers ranked above me (more trips, or same trips + higher rating)
     const ahead = await this.prisma.driver.count({
       where: {
         status: 'APPROVED',
@@ -268,11 +276,68 @@ export class DriverController {
       where: { status: 'APPROVED' },
     });
 
+    // Top 20 leaderboard entries — names + avatars only, NO phone numbers
+    const top = await this.prisma.driver.findMany({
+      where: { status: 'APPROVED' },
+      orderBy: [
+        { totalTrips: 'desc' },
+        { rating: 'desc' },
+      ],
+      take: 20,
+      select: {
+        id: true,
+        totalTrips: true,
+        rating: true,
+        user: {
+          select: {
+            firstName: true,
+            lastName: true,
+            avatar: true,
+          },
+        },
+      },
+    });
+
+    const myRank = ahead + 1;
+
     return {
-      rank: ahead + 1,
+      rank: myRank,
       totalDrivers,
       myTotalTrips: me.totalTrips,
       myRating: me.rating,
+      me: {
+        firstName: me.user.firstName,
+        lastName: me.user.lastName,
+        avatar: me.user.avatar,
+        rank: myRank,
+        totalTrips: me.totalTrips,
+        rating: me.rating,
+      },
+      leaderboard: top.map((d, i) => ({
+        rank: i + 1,
+        driverId: d.id,
+        firstName: d.user.firstName,
+        lastName: d.user.lastName,
+        avatar: d.user.avatar,
+        totalTrips: d.totalTrips,
+        rating: d.rating,
+        isMe: d.id === me.id,
+      })),
     };
+  }
+
+  // ── Assignments / Challenges ────────────────────────────────────────────
+
+  @Get('assignments')
+  async listAssignments(@Request() req: any) {
+    return this.assignmentsService.listForDriver(req.user.id);
+  }
+
+  @Post('assignments/:id/claim')
+  async claimAssignment(
+    @Request() req: any,
+    @Param('id') id: string,
+  ) {
+    return this.assignmentsService.claimReward(req.user.id, id);
   }
 }

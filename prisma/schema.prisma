@@ -627,6 +627,7 @@ model Admin {
   contractsCreated DriverContract[] @relation("ContractCreated")
   contractsTerminated DriverContract[] @relation("ContractTerminated")
   settingsUpdated SystemSetting[]
+  assignmentsCreated Assignment[]
 }
 
 model Employee {
@@ -720,6 +721,7 @@ model Driver {
   locationHistory   DriverLocation[]
   sessions          DriverSession[]
   balanceLogs       DriverBalanceLog[]   @relation("DriverBalanceLogs")
+  assignmentProgress DriverAssignmentProgress[]
 
   @@index([status])
   @@index([isOnline, isOnTrip])
@@ -1761,6 +1763,90 @@ model NotificationTemplate {
   bodyEn    String?
   variables String[]
   isActive  Boolean             @default(true)
+}
+
+// ----- Driver Assignments (admin-created challenges) -----
+
+enum AssignmentMetric {
+  RIDES_COMPLETED      // Number of rides completed in the period
+  EARNINGS             // Total earnings (in MRU) over the period
+  ONLINE_HOURS         // Hours spent online in the period
+  RATING_AVERAGE       // Average rating maintained
+}
+
+enum AssignmentRewardType {
+  WALLET_CREDIT        // Add MRU to driver wallet
+  RATING_BOOST         // Internal "starter" boost
+  COMMISSION_DISCOUNT  // Reduce commission % for next N rides
+  CUSTOM               // Free-form (e.g. swag, feature unlock)
+}
+
+enum AssignmentStatus {
+  ACTIVE
+  PAUSED
+  ARCHIVED
+}
+
+/// Driver-facing assignment / challenge — admin sets the goal, driver
+/// progresses toward it via normal app activity, and claims the reward
+/// when the goal is hit before the deadline.
+model Assignment {
+  id                String           @id @default(uuid())
+  titleAr           String
+  titleFr           String?
+  titleEn           String?
+  descriptionAr     String?
+  descriptionFr     String?
+  descriptionEn     String?
+
+  metric            AssignmentMetric
+  targetValue       Decimal          @db.Decimal(12, 2)
+
+  rewardType        AssignmentRewardType @default(WALLET_CREDIT)
+  rewardAmount      Decimal              @db.Decimal(12, 2)
+  rewardDescriptionAr String?
+  rewardDescriptionFr String?
+  rewardDescriptionEn String?
+
+  // Time window — counter resets each day/week if the assignment is
+  // recurring (admin can re-issue for next period)
+  startsAt          DateTime
+  endsAt            DateTime
+
+  // Targeting — null means "all approved drivers"
+  driverIds         String[]         @default([])
+  cityFilter        String?
+
+  status            AssignmentStatus @default(ACTIVE)
+  createdById       String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  createdBy         Admin?           @relation(fields: [createdById], references: [id])
+
+  progress          DriverAssignmentProgress[]
+
+  @@index([status, startsAt, endsAt])
+}
+
+/// Per-driver tracking of an Assignment.
+model DriverAssignmentProgress {
+  id            String     @id @default(uuid())
+  assignmentId  String
+  driverId      String
+  currentValue  Decimal    @default(0) @db.Decimal(12, 2)
+  isCompleted   Boolean    @default(false)
+  completedAt   DateTime?
+  isClaimed     Boolean    @default(false)
+  claimedAt     DateTime?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  assignment    Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  driver        Driver     @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
+  @@unique([assignmentId, driverId])
+  @@index([driverId, isCompleted])
 }
 
 // ----- Analytics & Logs -----

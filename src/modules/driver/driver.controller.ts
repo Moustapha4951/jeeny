@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { DriverService } from './driver.service';
 import { AssignmentsService } from './assignments.service';
+import { RechargeService } from './recharge.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -21,6 +22,7 @@ export class DriverController {
   constructor(
     private readonly driverService: DriverService,
     private readonly assignmentsService: AssignmentsService,
+    private readonly rechargeService: RechargeService,
     private readonly prisma: PrismaService,
   ) {}
 
@@ -339,5 +341,59 @@ export class DriverController {
     @Param('id') id: string,
   ) {
     return this.assignmentsService.claimReward(req.user.id, id);
+  }
+
+  // ── Wallet recharge requests ───────────────────────────────────────────
+
+  @Get('recharge-requests')
+  async listRechargeRequests(@Request() req: any) {
+    return this.rechargeService.listForDriver(req.user.id);
+  }
+
+  @Post('recharge-requests')
+  async createRechargeRequest(
+    @Request() req: any,
+    @Body() body: { amount: number },
+  ) {
+    return this.rechargeService.createRequest(req.user.id, body.amount);
+  }
+
+  @Get('recharge-requests/:id')
+  async getRechargeRequest(
+    @Request() req: any,
+    @Param('id') id: string,
+  ) {
+    return this.rechargeService.findOneForDriver(req.user.id, id);
+  }
+
+  @Post('recharge-requests/:id/method')
+  async setRechargeMethod(
+    @Request() req: any,
+    @Param('id') id: string,
+    @Body() body: { method: 'BANKILY' | 'SEDAD' | 'MASRVI' },
+  ) {
+    return this.rechargeService.setMethod(req.user.id, id, body.method);
+  }
+
+  @Post('recharge-requests/:id/messages')
+  async sendRechargeMessage(
+    @Request() req: any,
+    @Param('id') id: string,
+    @Body() body: { body?: string; imageUrl?: string },
+  ) {
+    return this.rechargeService.sendDriverMessage(
+      req.user.id,
+      id,
+      body.body,
+      body.imageUrl,
+    );
+  }
+
+  @Post('recharge-requests/:id/cancel')
+  async cancelRechargeRequest(
+    @Request() req: any,
+    @Param('id') id: string,
+  ) {
+    return this.rechargeService.cancelByDriver(req.user.id, id);
   }
 }

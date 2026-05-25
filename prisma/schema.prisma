@@ -663,6 +663,7 @@ model Employee {
   callCenterBookings  CallCenterBooking[]  @relation("CallCenterBookings")
   driverBalanceActions DriverBalanceLog[]  @relation("DriverBalanceActions")
   permissions         EmployeePermission[] @relation("EmployeePermissions")
+  rechargeReviews     RechargeRequest[]   @relation("RechargeReviewer")
 }
 
 model Driver {
@@ -722,6 +723,7 @@ model Driver {
   sessions          DriverSession[]
   balanceLogs       DriverBalanceLog[]   @relation("DriverBalanceLogs")
   assignmentProgress DriverAssignmentProgress[]
+  rechargeRequests  RechargeRequest[]
 
   @@index([status])
   @@index([isOnline, isOnTrip])
@@ -1847,6 +1849,87 @@ model DriverAssignmentProgress {
 
   @@unique([assignmentId, driverId])
   @@index([driverId, isCompleted])
+}
+
+// ----- Driver wallet recharge requests -----
+
+enum RechargeRequestStatus {
+  PENDING_PAYMENT // Driver picked an amount, hasn't sent receipt
+  AWAITING_REVIEW // Driver sent the screenshot, employee needs to review
+  APPROVED        // Employee approved → wallet credited
+  REJECTED        // Employee rejected (with a reason)
+  CANCELLED       // Driver cancelled before approval
+}
+
+enum RechargeMethod {
+  BANKILY
+  SEDAD
+  MASRVI
+}
+
+enum RechargeMessageSender {
+  DRIVER
+  EMPLOYEE
+  SYSTEM
+}
+
+enum RechargeMessageKind {
+  TEXT
+  IMAGE
+  AMOUNT_PROPOSAL // System message: "X MRU via METHOD"
+  METHOD_LIST     // System message: list of payment options
+  STATUS_UPDATE   // System message: approved / rejected
+}
+
+/// A single driver-initiated wallet top-up request. One request opens one
+/// chat thread between the driver and a Masar employee. When the employee
+/// approves, the wallet is credited and the request closes.
+model RechargeRequest {
+  id            String                @id @default(uuid())
+  driverId      String
+  amount        Decimal               @db.Decimal(12, 2)
+  method        RechargeMethod?
+  status        RechargeRequestStatus @default(PENDING_PAYMENT)
+
+  // Filled when an employee picks up the chat
+  assignedEmployeeId String?
+
+  // Filled when finalized
+  rejectionReason String?
+  reviewedAt      DateTime?
+
+  // Filled when approved → wallet credit applied
+  transactionId   String?
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  driver           Driver   @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  assignedEmployee Employee? @relation("RechargeReviewer", fields: [assignedEmployeeId], references: [id])
+  messages         RechargeMessage[]
+
+  @@index([driverId, status])
+  @@index([status, createdAt])
+}
+
+/// One message in a recharge chat thread. Senders are either the driver,
+/// an employee, or the system (which posts canned info messages like
+/// payment instructions).
+model RechargeMessage {
+  id          String                @id @default(uuid())
+  requestId   String
+  sender      RechargeMessageSender
+  senderUserId String?              // user.id of driver or employee, null for SYSTEM
+  kind        RechargeMessageKind   @default(TEXT)
+  body        String?
+  imageUrl    String?
+  metadata    Json?
+  isRead      Boolean               @default(false)
+  createdAt   DateTime              @default(now())
+
+  request RechargeRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@index([requestId, createdAt])
 }
 
 // ----- Analytics & Logs -----

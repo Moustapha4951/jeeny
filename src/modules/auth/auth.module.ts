@@ -1,16 +1,18 @@
-import { Module, Global } from '@nestjs/common';
+import { Module, Global, forwardRef } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { HttpModule } from '@nestjs/axios';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { AuthController } from './auth.controller';
+import { EmployeeController } from './employee.controller';
 import { OtpService } from './otp.service';
 import { MoorsylService } from './moorsyl.service';
 import { JwtAuthService } from './jwt.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
+import { DriverModule } from '../driver/driver.module';
 
 @Global()
 @Module({
@@ -29,8 +31,9 @@ import { RolesGuard } from './guards/roles.guard';
       }),
       inject: [ConfigService],
     }),
+    forwardRef(() => DriverModule),
   ],
-  controllers: [AuthController],
+  controllers: [AuthController, EmployeeController],
   providers: [OtpService, MoorsylService, JwtAuthService, JwtStrategy, JwtAuthGuard, RolesGuard],
   exports: [OtpService, JwtAuthService, JwtAuthGuard, RolesGuard, PassportModule],
 })

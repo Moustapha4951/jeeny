@@ -32,6 +32,15 @@ export class DriverService {
       throw new NotFoundException('Driver profile not found');
     }
 
+    // Surface the admin-configured minimum balance so the app can warn the
+    // driver and auto-offline them when their wallet falls below it.
+    const minBalanceSetting = await this.prisma.systemSetting.findUnique({
+      where: { key: 'driver_minimum_balance' },
+    });
+    const minimumBalance = minBalanceSetting
+      ? Number(minBalanceSetting.value)
+      : 0;
+
     return {
       id: user.id,
       firstName: user.firstName,
@@ -41,6 +50,7 @@ export class DriverService {
       driver: user.driver,
       wallet: user.wallet,
       isOnline: user.driver.isOnline,
+      minimumBalance,
     };
   }
 
@@ -487,7 +497,49 @@ export class DriverService {
       console.error('Failed to update assignment progress:', e);
     }
 
-    return { success: true, ride: updatedRide, driverShare };
+    // Auto-offline the driver if commission deduction pushed them below the
+    // admin-configured minimum balance. We re-fetch the wallet to get the
+    // post-deduction value, compare it against the threshold, and flip
+    // `isOnline=false` so the driver stops receiving offers until they
+    // top up.
+    let autoOfflined = false;
+    let minimumBalance = 0;
+    try {
+      const minSetting = await this.prisma.systemSetting.findUnique({
+        where: { key: 'driver_minimum_balance' },
+      });
+      minimumBalance = minSetting ? Number(minSetting.value) : 0;
+      const updatedWallet = driver.user.wallet
+        ? await this.prisma.wallet.findUnique({
+            where: { id: driver.user.wallet.id },
+          })
+        : null;
+      const newBalance = updatedWallet ? Number(updatedWallet.balance) : 0;
+      if (
+        minimumBalance > 0 &&
+        newBalance < minimumBalance &&
+        driver.isOnline
+      ) {
+        await this.prisma.driver.update({
+          where: { userId },
+          data: { isOnline: false },
+        });
+        autoOfflined = true;
+        console.log(
+          `⚠️ Driver ${driver.id} auto-offlined: balance ${newBalance} below minimum ${minimumBalance}`,
+        );
+      }
+    } catch (e) {
+      console.error('Auto-offline check failed:', e);
+    }
+
+    return {
+      success: true,
+      ride: updatedRide,
+      driverShare,
+      autoOfflined,
+      minimumBalance,
+    };
   }
 
   async cancelRideByDriver(userId: string, rideId: string, reason: string) {

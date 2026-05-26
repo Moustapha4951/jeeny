@@ -315,7 +315,13 @@ export class RechargeService {
         driver: {
           include: {
             user: {
-              select: { firstName: true, lastName: true, phone: true, avatar: true },
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                phone: true,
+                avatar: true,
+              },
             },
           },
         },
@@ -331,7 +337,13 @@ export class RechargeService {
         driver: {
           include: {
             user: {
-              select: { firstName: true, lastName: true, phone: true, avatar: true },
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                phone: true,
+                avatar: true,
+              },
             },
           },
         },

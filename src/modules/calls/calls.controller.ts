@@ -28,6 +28,17 @@ export class CallsController {
     return this.calls.start(req.user.id, body.receiverId);
   }
 
+  /// Convenience for the driver: call into the recharge support pool by
+  /// request id. The backend resolves the right employee (assigned, or
+  /// fans out to any FINANCE / OPERATIONS user with an FCM token).
+  @Post('recharge-support')
+  async startRechargeSupport(
+    @Request() req: any,
+    @Body() body: { requestId: string },
+  ) {
+    return this.calls.startRechargeSupport(req.user.id, body.requestId);
+  }
+
   @Get(':id/token')
   async token(@Request() req: any, @Param('id') id: string) {
     return this.calls.getToken(req.user.id, id);

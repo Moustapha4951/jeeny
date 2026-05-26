@@ -101,6 +101,12 @@ export class CallsService {
     if (!caller || !receiver) {
       throw new NotFoundException('User not found');
     }
+    if (!receiver.fcmToken) {
+      // We can still place the call but the receiver won't ring
+      this.logger.warn(
+        `Receiver ${receiverId} has no FCM token; ringing won't fire`,
+      );
+    }
 
     const channel = `masar_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
     const callerToken = this.buildToken(channel, this.uidFor(callerId));
@@ -156,7 +162,56 @@ export class CallsService {
     };
   }
 
-  /** Returns a token for whichever side is asking (must be a participant). */
+  /**
+   * Driver-side helper: place a call to whoever is handling this recharge
+   * request. If an employee was previously assigned, ring them. Otherwise
+   * fan out to any FINANCE / OPERATIONS employee with an FCM token.
+   */
+  async startRechargeSupport(callerId: string, requestId: string) {
+    const request = await this.prisma.rechargeRequest.findUnique({
+      where: { id: requestId },
+      include: {
+        assignedEmployee: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                phone: true,
+                fcmToken: true,
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!request) throw new NotFoundException('Recharge request not found');
+
+    let receiverId: string | null =
+      request.assignedEmployee?.user.id ?? null;
+
+    if (!receiverId) {
+      // Pick any FINANCE/OPERATIONS employee with a registered token
+      const candidate = await this.prisma.employee.findFirst({
+        where: {
+          role: { in: ['FINANCE', 'OPERATIONS'] },
+          user: { fcmToken: { not: null } },
+        },
+        include: { user: { select: { id: true } } },
+      });
+      receiverId = candidate?.user.id ?? null;
+    }
+
+    if (!receiverId) {
+      throw new BadRequestException(
+        'لا يوجد موظف متاح للرد حالياً، حاول مجدداً قريباً',
+      );
+    }
+
+    return this.start(callerId, receiverId);
+  }
+
   async getToken(userId: string, callId: string) {
     const call = await this.prisma.call.findUnique({
       where: { id: callId },

@@ -4,6 +4,7 @@ import { DriverGateway } from './driver.gateway';
 import { UploadDocumentDto, DocumentType } from './dto/upload-document.dto';
 import { LocationService } from './location.service';
 import { AssignmentsService } from './assignments.service';
+import { FirebaseService } from '../../firebase/firebase.service';
 
 @Injectable()
 export class DriverService {
@@ -13,6 +14,7 @@ export class DriverService {
     private driverGateway: DriverGateway,
     @Inject(forwardRef(() => AssignmentsService))
     private assignmentsService: AssignmentsService,
+    private firebaseService: FirebaseService,
   ) {}
 
   async getProfile(userId: string) {
@@ -41,6 +43,14 @@ export class DriverService {
       ? Number(minBalanceSetting.value)
       : 0;
 
+    // Fire-and-forget: send a single push reminder per day for any
+    // expiry-bearing document that's within 5 days of expiring (or already
+    // expired). We dedupe per-user using the Notification table so the
+    // driver isn't spammed across multiple profile fetches.
+    this.maybeSendDocumentExpiryReminder(userId).catch((e) =>
+      console.error('document expiry reminder failed:', e),
+    );
+
     return {
       id: user.id,
       firstName: user.firstName,
@@ -52,6 +62,134 @@ export class DriverService {
       isOnline: user.driver.isOnline,
       minimumBalance,
     };
+  }
+
+  /// Sends a reminder push when a document is expiring in ≤ 5 days OR
+  /// already expired. Deduped: one push per (userId, docType, day).
+  private async maybeSendDocumentExpiryReminder(userId: string) {
+    const watchedTypes = [
+      'LICENSE',
+      'NATIONAL_ID',
+      'VEHICLE_REG',
+      'INSURANCE',
+    ];
+
+    const docs = await this.prisma.document.findMany({
+      where: {
+        userId,
+        type: { in: watchedTypes as any },
+        status: 'APPROVED',
+        expiresAt: { not: null },
+      },
+    });
+
+    if (docs.length === 0) return;
+
+    const now = Date.now();
+    const fiveDaysMs = 5 * 24 * 60 * 60 * 1000;
+
+    // Build the set of docs that are either expired or within 5 days
+    const flagged = docs.filter((d) => {
+      if (!d.expiresAt) return false;
+      const diff = new Date(d.expiresAt).getTime() - now;
+      return diff <= fiveDaysMs; // includes negative (already expired)
+    });
+
+    if (flagged.length === 0) return;
+
+    // Have we pushed in the last 24 hours? Look in Notification.
+    const since = new Date(now - 24 * 60 * 60 * 1000);
+    const recent = await this.prisma.notification.findFirst({
+      where: {
+        userId,
+        type: 'SYSTEM',
+        actionData: 'DOC_EXPIRY',
+        createdAt: { gte: since },
+      },
+    });
+    if (recent) return;
+
+    // Build a friendly Arabic message
+    const labelFor = (t: string) => {
+      switch (t) {
+        case 'LICENSE':
+          return 'رخصة القيادة';
+        case 'NATIONAL_ID':
+          return 'الهوية الوطنية';
+        case 'VEHICLE_REG':
+          return 'استمارة المركبة';
+        case 'INSURANCE':
+          return 'التأمين';
+        default:
+          return t;
+      }
+    };
+
+    const expired = flagged.filter(
+      (d) => new Date(d.expiresAt!).getTime() < now,
+    );
+    const soon = flagged.filter(
+      (d) => new Date(d.expiresAt!).getTime() >= now,
+    );
+
+    const titleAr =
+      expired.length > 0
+        ? 'مستندات منتهية الصلاحية'
+        : 'تذكير بتجديد المستندات';
+
+    let bodyAr: string;
+    if (expired.length > 0) {
+      const names = expired.map((d) => labelFor(d.type)).join('، ');
+      bodyAr =
+        `انتهت صلاحية ${names}. لا يمكنك العمل حتى تجدّدها من شاشة المستندات.`;
+    } else {
+      const parts = soon.map((d) => {
+        const days = Math.max(
+          0,
+          Math.ceil(
+            (new Date(d.expiresAt!).getTime() - now) /
+              (24 * 60 * 60 * 1000),
+          ),
+        );
+        return `${labelFor(d.type)} (${days} يوم)`;
+      });
+      bodyAr = `قم بتجديد: ${parts.join('، ')} قبل أن تنتهي صلاحيتها.`;
+    }
+
+    // Persist + push
+    const notification = await this.prisma.notification.create({
+      data: {
+        userId,
+        type: 'SYSTEM',
+        titleAr,
+        bodyAr,
+        actionType: 'NONE',
+        actionData: 'DOC_EXPIRY',
+        sentVia: 'PUSH',
+        isSent: true,
+      },
+    });
+
+    // Push via FCM if we have a token
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { fcmToken: true },
+    });
+    if (user?.fcmToken) {
+      try {
+        await this.firebaseService.sendNotification(
+          user.fcmToken,
+          titleAr,
+          bodyAr,
+          {
+            type: 'DOC_EXPIRY',
+            notificationId: notification.id,
+          },
+        );
+      } catch (e) {
+        console.error('FCM doc expiry push failed:', e);
+      }
+    }
   }
 
   async updateLocation(userId: string, latitude: number, longitude: number) {
@@ -693,6 +831,32 @@ export class DriverService {
 
     const prismaDocType = typeMap[documentType] || documentType;
 
+    // Documents that MUST come with an expiry date.
+    const requiresExpiry = [
+      'LICENSE',
+      'NATIONAL_ID',
+      'VEHICLE_REG',
+      'INSURANCE',
+    ].includes(prismaDocType);
+
+    if (requiresExpiry) {
+      if (!expiresAt) {
+        throw new BadRequestException(
+          'يجب تحديد تاريخ انتهاء المستند قبل الرفع'
+        );
+      }
+      const exp = new Date(expiresAt);
+      if (isNaN(exp.getTime())) {
+        throw new BadRequestException('تاريخ انتهاء غير صالح');
+      }
+      // Block past dates — driver must commit to a valid future date.
+      if (exp.getTime() < Date.now()) {
+        throw new BadRequestException(
+          'تاريخ الانتهاء يجب أن يكون في المستقبل'
+        );
+      }
+    }
+
     // Check if document already exists
     const existingDoc = await this.prisma.document.findFirst({
       where: {
@@ -701,14 +865,22 @@ export class DriverService {
       },
     });
 
-    // Prevent re-uploading approved documents
-    if (existingDoc && existingDoc.status === 'APPROVED') {
+    // Prevent re-uploading APPROVED documents UNLESS they have already
+    // expired — driver needs to be able to renew an expired license, ID,
+    // registration, or insurance with a fresh photo + future date.
+    const isExpiredApproved =
+      existingDoc &&
+      existingDoc.status === 'APPROVED' &&
+      existingDoc.expiresAt &&
+      new Date(existingDoc.expiresAt).getTime() < Date.now();
+
+    if (existingDoc && existingDoc.status === 'APPROVED' && !isExpiredApproved) {
       throw new BadRequestException(
         'This document has already been approved and cannot be changed'
       );
     }
 
-    // Only allow re-upload if document is rejected or pending
+    // Only allow re-upload if document is rejected, pending, or expired
     if (existingDoc && existingDoc.status === 'PENDING') {
       throw new BadRequestException(
         'This document is currently under review. Please wait for admin decision.'

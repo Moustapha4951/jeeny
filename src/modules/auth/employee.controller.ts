@@ -59,10 +59,10 @@ export class EmployeeController {
         message: 'الحساب غير مسجل كموظف',
       };
     }
-    // For v1 we use the existing fcmToken-as-password convention so admins
-    // can create employee accounts with the same Prisma scripts they use
-    // for company employer accounts.
-    const stored = user.fcmToken;
+    // v1 stores plain-text password in `passwordHash` (no hashing yet).
+    // Falls back to the legacy `fcmToken`-as-password convention for any
+    // accounts that haven't been migrated yet.
+    const stored = user.passwordHash ?? user.fcmToken;
     if (!stored || stored !== password) {
       return {
         success: false,

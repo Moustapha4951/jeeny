@@ -25,8 +25,8 @@ async function main() {
   const user = await prisma.user.upsert({
     where: { email },
     update: {
-      // fcmToken is repurposed as password storage in v1
-      fcmToken: password,
+      // Plain text in v1; hash later before going public.
+      passwordHash: password,
       firstName: 'محمد',
       lastName: 'الموظف',
       isActive: true,
@@ -36,7 +36,7 @@ async function main() {
       phone: '+22200000001', // unique placeholder
       firstName: 'محمد',
       lastName: 'الموظف',
-      fcmToken: password,
+      passwordHash: password,
       isActive: true,
     },
   });

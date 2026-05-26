@@ -153,6 +153,20 @@ export class RechargeService {
       where: { id: requestId, driverId: driver.id },
       include: {
         messages: { orderBy: { createdAt: 'asc' } },
+        // Surface the assigned employee so the driver can call them.
+        assignedEmployee: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                phone: true,
+                avatar: true,
+              },
+            },
+          },
+        },
       },
     });
     if (!request) {

@@ -193,7 +193,8 @@ export class RechargeService {
   }
 
   /**
-   * Driver posts a message — typically a screenshot of the transfer.
+   * Driver posts a message — typically a screenshot of the transfer or
+   * a short voice note.
    * If the message has an image and the request is still PENDING_PAYMENT
    * it auto-flips to AWAITING_REVIEW so the employee queue picks it up.
    */
@@ -202,6 +203,8 @@ export class RechargeService {
     requestId: string,
     body: string | undefined,
     imageUrl: string | undefined,
+    audioUrl?: string,
+    audioDurationMs?: number,
   ) {
     const request = await this.findOneForDriver(driverUserId, requestId);
     if (
@@ -210,17 +213,24 @@ export class RechargeService {
     ) {
       throw new BadRequestException('لا يمكن إرسال رسائل لطلب مغلق');
     }
-    if (!body && !imageUrl) {
+    if (!body && !imageUrl && !audioUrl) {
       throw new BadRequestException('الرسالة فارغة');
     }
+    const kind: RechargeMessageKind = audioUrl
+      ? 'AUDIO'
+      : imageUrl
+        ? 'IMAGE'
+        : 'TEXT';
     const message = await this.prisma.rechargeMessage.create({
       data: {
         requestId: request.id,
         sender: 'DRIVER',
         senderUserId: driverUserId,
-        kind: imageUrl ? 'IMAGE' : 'TEXT',
+        kind,
         body,
         imageUrl,
+        audioUrl,
+        audioDurationMs,
       },
     });
     if (imageUrl && request.status === 'PENDING_PAYMENT') {
@@ -233,7 +243,11 @@ export class RechargeService {
     await this.pushToEmployee(
       request.id,
       'رسالة من سائق',
-      imageUrl ? 'أرسل لقطة شاشة للتحويل' : (body ?? ''),
+      audioUrl
+        ? 'رسالة صوتية'
+        : imageUrl
+          ? 'أرسل لقطة شاشة للتحويل'
+          : (body ?? ''),
     );
     return message;
   }
@@ -321,12 +335,14 @@ export class RechargeService {
     requestId: string,
     body: string | undefined,
     imageUrl: string | undefined,
+    audioUrl?: string,
+    audioDurationMs?: number,
   ) {
     const request = await this.findOneForEmployee(requestId);
     if (request.status === 'APPROVED' || request.status === 'REJECTED' || request.status === 'CANCELLED') {
       throw new BadRequestException('Request is closed');
     }
-    if (!body && !imageUrl) {
+    if (!body && !imageUrl && !audioUrl) {
       throw new BadRequestException('Empty message');
     }
     // Soft-claim the request to this employee
@@ -336,20 +352,31 @@ export class RechargeService {
         data: { assignedEmployeeId: employeeId },
       });
     }
+    const kind: RechargeMessageKind = audioUrl
+      ? 'AUDIO'
+      : imageUrl
+        ? 'IMAGE'
+        : 'TEXT';
     const message = await this.prisma.rechargeMessage.create({
       data: {
         requestId: request.id,
         sender: 'EMPLOYEE',
         senderUserId: employeeUserId,
-        kind: imageUrl ? 'IMAGE' : 'TEXT',
+        kind,
         body,
         imageUrl,
+        audioUrl,
+        audioDurationMs,
       },
     });
     await this.pushToDriver(
       request.id,
       'رد من مسار',
-      imageUrl ? 'صورة جديدة' : (body ?? ''),
+      audioUrl
+        ? 'رسالة صوتية'
+        : imageUrl
+          ? 'صورة جديدة'
+          : (body ?? ''),
     );
     return message;
   }

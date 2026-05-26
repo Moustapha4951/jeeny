@@ -261,7 +261,12 @@ export class EmployeeController {
   async sendRechargeMessage(
     @Request() req: any,
     @Param('id') id: string,
-    @Body() body: { body?: string; imageUrl?: string },
+    @Body() body: {
+      body?: string;
+      imageUrl?: string;
+      audioUrl?: string;
+      audioDurationMs?: number;
+    },
   ) {
     const employee = await this.assertEmployee(req.user.id);
     return this.rechargeService.sendEmployeeMessage(
@@ -270,6 +275,8 @@ export class EmployeeController {
       id,
       body.body,
       body.imageUrl,
+      body.audioUrl,
+      body.audioDurationMs,
     );
   }
 

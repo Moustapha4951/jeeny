@@ -1879,6 +1879,7 @@ enum RechargeMessageSender {
 enum RechargeMessageKind {
   TEXT
   IMAGE
+  AUDIO
   AMOUNT_PROPOSAL // System message: "X MRU via METHOD"
   METHOD_LIST     // System message: list of payment options
   STATUS_UPDATE   // System message: approved / rejected
@@ -1926,6 +1927,8 @@ model RechargeMessage {
   kind        RechargeMessageKind   @default(TEXT)
   body        String?
   imageUrl    String?
+  audioUrl    String?
+  audioDurationMs Int?
   metadata    Json?
   isRead      Boolean               @default(false)
   createdAt   DateTime              @default(now())

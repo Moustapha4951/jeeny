@@ -379,13 +379,20 @@ export class DriverController {
   async sendRechargeMessage(
     @Request() req: any,
     @Param('id') id: string,
-    @Body() body: { body?: string; imageUrl?: string },
+    @Body() body: {
+      body?: string;
+      imageUrl?: string;
+      audioUrl?: string;
+      audioDurationMs?: number;
+    },
   ) {
     return this.rechargeService.sendDriverMessage(
       req.user.id,
       id,
       body.body,
       body.imageUrl,
+      body.audioUrl,
+      body.audioDurationMs,
     );
   }
 

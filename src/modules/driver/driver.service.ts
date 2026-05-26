@@ -412,6 +412,34 @@ export class DriverService {
       throw new NotFoundException('Ride not found');
     }
 
+    // Idempotency: if the ride is already COMPLETED return the previous
+    // result so a retried tap from the driver app doesn't 500.
+    if (ride.status === 'COMPLETED') {
+      console.log(`ℹ️ Ride ${rideId} already completed — returning prior result`);
+      const wallet = driver.user.wallet
+        ? await this.prisma.wallet.findUnique({
+            where: { id: driver.user.wallet.id },
+          })
+        : null;
+      const minSetting = await this.prisma.systemSetting.findUnique({
+        where: { key: 'driver_minimum_balance' },
+      });
+      const minimumBalance = minSetting ? Number(minSetting.value) : 0;
+      const finalFare = Number(ride.finalFare || ride.estimatedFare || 0);
+      // Best-effort estimate (vehicle commission may differ but it's just
+      // for display; backend already booked the real numbers).
+      const driverShare = finalFare * 0.85;
+      return {
+        success: true,
+        ride,
+        driverShare,
+        autoOfflined: false,
+        minimumBalance,
+        alreadyCompleted: true,
+        currentBalance: wallet ? Number(wallet.balance) : 0,
+      };
+    }
+
     const finalFare = Number(ride.finalFare || ride.estimatedFare || 0);
 
     // Look up vehicle type admin commission

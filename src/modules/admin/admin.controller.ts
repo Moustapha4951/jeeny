@@ -102,6 +102,14 @@ export class AdminController {
     return this.adminService.bookRideForCustomer(bookingData);
   }
 
+  // Hourly / open ride booking — same shape as bookRideForCustomer but
+  // takes bookedHours instead of a destination. Backend sets rideType=HOURLY
+  // and creates the matching HourlyRide row.
+  @Post('callcenter/book-hourly')
+  async bookHourlyRide(@Body() bookingData: any) {
+    return this.adminService.bookHourlyRide(bookingData);
+  }
+
   // Fare estimation endpoint (public for testing)
   @Post('callcenter/estimate')
   async estimateFare(@Body() estimateData: any) {

@@ -365,6 +365,7 @@ export class DriverService {
             user: true,
           },
         },
+        hourlyRide: true,
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -553,6 +554,20 @@ export class DriverService {
       data: { rideId, event: 'STARTED', data: { driverId: driver.id } },
     });
 
+    // For hourly rides: stamp startedAt on the HourlyRide row so the
+    // meter begins now. We do this best-effort — failure should not
+    // block the ride start.
+    if (ride.rideType === 'HOURLY') {
+      try {
+        await this.prisma.hourlyRide.update({
+          where: { rideId },
+          data: { startedAt: new Date() },
+        });
+      } catch (e) {
+        console.error('Failed to stamp hourlyRide.startedAt:', e);
+      }
+    }
+
     console.log(`🚗 Ride ${rideId} started by driver ${driver.id}`);
 
     return { success: true, ride };
@@ -602,6 +617,56 @@ export class DriverService {
         alreadyCompleted: true,
         currentBalance: wallet ? Number(wallet.balance) : 0,
       };
+    }
+
+    // For hourly rides, finalize the meter first so finalFare reflects
+    // actual time used + any extra-time charges. Otherwise we'd bill the
+    // pre-booked estimate instead of what really happened.
+    if (ride.rideType === 'HOURLY') {
+      try {
+        const hourly = await this.prisma.hourlyRide.findUnique({
+          where: { rideId },
+        });
+        if (hourly && !hourly.endedAt) {
+          const startedAt = hourly.startedAt ?? new Date();
+          const endedAt = new Date();
+          const actualMinutes = Math.max(
+            1,
+            Math.round((endedAt.getTime() - startedAt.getTime()) / 60000),
+          );
+          const bookedTotalMinutes =
+            hourly.bookedHours * 60 + hourly.bookedMinutes;
+          const extraMinutes = Math.max(
+            0,
+            actualMinutes - bookedTotalMinutes,
+          );
+          const pricePerMinute = Number(hourly.pricePerHour) / 60;
+          const extraCharge = extraMinutes * pricePerMinute;
+          const actualTotal = Number(hourly.estimatedTotal) + extraCharge;
+
+          await this.prisma.hourlyRide.update({
+            where: { rideId },
+            data: {
+              actualMinutes,
+              actualTotal: actualTotal as any,
+              extraMinutes,
+              extraCharge: extraCharge as any,
+              endedAt,
+            },
+          });
+          // Patch the Ride.finalFare so the commission is computed off
+          // the actual total instead of the pre-booked estimate.
+          await this.prisma.ride.update({
+            where: { id: rideId },
+            data: { finalFare: actualTotal as any },
+          });
+          // Mutate the in-memory ride object so the finalFare assignment
+          // below reads the new value.
+          (ride as any).finalFare = actualTotal;
+        }
+      } catch (e) {
+        console.error('Hourly finalize failed (continuing with estimate):', e);
+      }
     }
 
     const finalFare = Number(ride.finalFare || ride.estimatedFare || 0);

@@ -755,6 +755,275 @@ export class AdminService {
     };
   }
 
+  /// Book an hourly / "open" ride. Customer pays for time, not distance.
+  /// We persist a Ride row (rideType=HOURLY) plus a HourlyRide companion
+  /// row that tracks the booked hours and price-per-hour. The standard
+  /// matching service is reused so the offer reaches drivers identically.
+  async bookHourlyRide(bookingData: {
+    customerPhone: string;
+    customerName?: string;
+    pickupLat: number;
+    pickupLng: number;
+    pickupAddress: string;
+    bookedHours: number;
+    pricePerHour?: number; // optional override; otherwise pulled from vehicleType.pricePerMin × 60
+    vehicleTypeId?: string;
+    companyId?: string;
+    driverNotes?: string;
+    strategy?: string;
+    targetDriverIds?: string[];
+  }) {
+    const configValidation = await this.validateBookingConfiguration();
+    if (!configValidation.valid) {
+      return {
+        success: false,
+        message: 'تعذر إنشاء الرحلة بسبب مشاكل في الإعدادات',
+        errors: configValidation.errors,
+        requiresAdminAction: true,
+      };
+    }
+
+    const {
+      customerPhone,
+      customerName,
+      pickupLat,
+      pickupLng,
+      pickupAddress,
+      bookedHours,
+      pricePerHour: overridePricePerHour,
+      vehicleTypeId,
+      companyId,
+      driverNotes,
+      strategy,
+      targetDriverIds,
+    } = bookingData;
+
+    if (!bookedHours || bookedHours < 1 || bookedHours > 24) {
+      return {
+        success: false,
+        message: 'يجب أن يكون عدد الساعات بين 1 و 24',
+      };
+    }
+
+    // ── Resolve consumer (find or create by phone) ──────────────────────
+    let consumer = await this.prisma.consumer.findFirst({
+      where: { user: { phone: customerPhone } },
+      include: { user: true },
+    });
+
+    if (!consumer) {
+      const fullName = (customerName || 'عميل').trim();
+      const parts = fullName.split(' ');
+      const firstName = parts[0] || 'عميل';
+      const lastName = parts.length > 1 ? parts.slice(1).join(' ') : '';
+
+      const user = await this.prisma.user.create({
+        data: {
+          phone: customerPhone,
+          phoneVerified: true,
+          firstName,
+          lastName,
+        },
+      });
+      consumer = await this.prisma.consumer.create({
+        data: { userId: user.id },
+        include: { user: true },
+      });
+      await this.prisma.wallet.create({
+        data: {
+          userId: user.id,
+          type: 'CONSUMER',
+          balance: 0,
+        },
+      });
+    }
+
+    // ── Pick a vehicle type ─────────────────────────────────────────────
+    const availableTypes = configValidation.vehicleTypes;
+    let selectedVehicleTypeId = vehicleTypeId;
+    if (
+      !selectedVehicleTypeId ||
+      !availableTypes.some((vt) => vt.id === selectedVehicleTypeId)
+    ) {
+      availableTypes.sort(
+        (a, b) => Number(a.basePrice) - Number(b.basePrice),
+      );
+      selectedVehicleTypeId = availableTypes[0]?.id;
+    }
+    if (!selectedVehicleTypeId) {
+      return { success: false, message: 'لا يوجد نوع مركبة متاح' };
+    }
+
+    // ── Compute pricing ─────────────────────────────────────────────────
+    let pricePerHour = overridePricePerHour;
+    if (!pricePerHour) {
+      const vt = await this.prisma.vehicleType.findUnique({
+        where: { id: selectedVehicleTypeId },
+      });
+      if (vt) {
+        // Default: per-minute rate × 60 for an hourly equivalent.
+        // Caller can override by passing pricePerHour.
+        pricePerHour = Number(vt.pricePerMin) * 60;
+        // Fall back to a sensible floor if pricePerMin is 0.
+        if (pricePerHour <= 0) pricePerHour = 200;
+      } else {
+        pricePerHour = 200;
+      }
+    }
+    const estimatedTotal = Number(pricePerHour) * bookedHours;
+
+    // ── Create Ride + HourlyRide in one transaction ─────────────────────
+    // The Ride model requires a dropoff; for hourly we re-use the pickup
+    // coords/address since there's no real destination. The driver app
+    // shows a "ساعية" badge instead of a dropoff line.
+    const result = await this.prisma.$transaction(async (tx) => {
+      const ride = await tx.ride.create({
+        data: {
+          consumerId: consumer!.id,
+          companyId,
+          vehicleTypeId: selectedVehicleTypeId!,
+          rideType: 'HOURLY',
+          status: 'SEARCHING',
+          pickupLat,
+          pickupLng,
+          pickupAddress,
+          dropoffLat: pickupLat,
+          dropoffLng: pickupLng,
+          dropoffAddress: pickupAddress,
+          distanceKm: 0,
+          durationMin: bookedHours * 60,
+          estimatedFare: estimatedTotal,
+          bookingSource: 'CALL_CENTER',
+          paymentMethod: 'CASH',
+          driverNotes:
+            driverNotes ?? `رحلة ساعية: ${bookedHours} ساعة • ${estimatedTotal.toFixed(0)} MRU`,
+        },
+      });
+
+      const hourly = await tx.hourlyRide.create({
+        data: {
+          rideId: ride.id,
+          bookedHours,
+          bookedMinutes: 0,
+          pricePerHour: pricePerHour as any,
+          estimatedTotal: estimatedTotal as any,
+        },
+      });
+
+      return { ride, hourly };
+    });
+
+    // ── Dispatch ─────────────────────────────────────────────────────────
+    let maxRadiusKm: number | undefined;
+    let expansionKm: number | undefined;
+    if (companyId) {
+      const company = await this.prisma.company.findUnique({
+        where: { id: companyId },
+      });
+      if (company && company.canConfigureDispatch) {
+        maxRadiusKm = Number(company.dispatchRadiusKm);
+        expansionKm = Number(company.resendExpansionKm);
+      }
+    }
+
+    this.matchingService
+      .findAndNotifyDrivers(
+        result.ride.id,
+        pickupLat,
+        pickupLng,
+        selectedVehicleTypeId,
+        {
+          maxRadiusKm,
+          expansionKm,
+          strategy: strategy as any,
+          targetDriverIds,
+        },
+      )
+      .catch((e) =>
+        console.error('Error finding drivers for hourly ride:', e),
+      );
+
+    return {
+      success: true,
+      message: 'تم إنشاء الرحلة الساعية بنجاح',
+      ride: {
+        id: result.ride.id,
+        rideNumber: result.ride.rideNumber,
+        rideType: 'HOURLY',
+        bookedHours,
+        pricePerHour: Number(pricePerHour),
+        estimatedFare: estimatedTotal,
+      },
+    };
+  }
+
+  /// Mark an hourly ride as actually started — the meter begins now.
+  /// Called from the driver app when the customer is in the car.
+  async startHourlyRide(rideId: string) {
+    const hourly = await this.prisma.hourlyRide.findUnique({
+      where: { rideId },
+    });
+    if (!hourly) {
+      throw new NotFoundException('Hourly ride row not found');
+    }
+    if (hourly.startedAt) {
+      // Idempotent — return current state instead of erroring.
+      return { success: true, hourly };
+    }
+    const updated = await this.prisma.hourlyRide.update({
+      where: { rideId },
+      data: { startedAt: new Date() },
+    });
+    return { success: true, hourly: updated };
+  }
+
+  /// Finalize an hourly ride. Computes actual minutes used, charges for
+  /// any extra time beyond the booked window, and closes out the row.
+  /// Returns the new actual total which the regular completeRide flow
+  /// will use as `finalFare`.
+  async finalizeHourlyRide(rideId: string) {
+    const hourly = await this.prisma.hourlyRide.findUnique({
+      where: { rideId },
+    });
+    if (!hourly) {
+      throw new NotFoundException('Hourly ride row not found');
+    }
+    if (hourly.endedAt) {
+      return { success: true, hourly };
+    }
+
+    const startedAt = hourly.startedAt ?? new Date();
+    const endedAt = new Date();
+    const actualMinutes = Math.max(
+      1,
+      Math.round((endedAt.getTime() - startedAt.getTime()) / 60000),
+    );
+    const bookedTotalMinutes = hourly.bookedHours * 60 + hourly.bookedMinutes;
+    const extraMinutes = Math.max(0, actualMinutes - bookedTotalMinutes);
+    const pricePerMinute = Number(hourly.pricePerHour) / 60;
+    const extraCharge = extraMinutes * pricePerMinute;
+    const actualTotal = Number(hourly.estimatedTotal) + extraCharge;
+
+    const updated = await this.prisma.hourlyRide.update({
+      where: { rideId },
+      data: {
+        actualMinutes,
+        actualTotal: actualTotal as any,
+        extraMinutes,
+        extraCharge: extraCharge as any,
+        endedAt,
+      },
+    });
+
+    // Sync the final fare onto the Ride too so completeRide picks it up.
+    await this.prisma.ride.update({
+      where: { id: rideId },
+      data: { finalFare: actualTotal as any },
+    });
+
+    return { success: true, hourly: updated };
+  }
+
   async getNearbyDriversForCustomSelection(requestData: any) {
     const { pickupLat, pickupLng, vehicleTypeId, companyId } = requestData;
     

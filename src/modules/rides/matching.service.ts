@@ -265,12 +265,43 @@ export class MatchingService {
             user: true,
           },
         },
+        hourlyRide: true,
       },
     });
 
     if (!ride) {
       return;
     }
+
+    // Build the static portion of the offer payload once. Driver-specific
+    // distance is added per recipient. All values are strings because FCM
+    // data payloads must be string-only.
+    const buildPayload = (distanceKm: string) => {
+      const base: Record<string, string> = {
+        type: 'RIDE_OFFER',
+        rideId: ride.id,
+        rideType: ride.rideType, // CITY | SCHEDULED | HOURLY
+        distance: distanceKm,
+        pickupAddress: ride.pickupAddress,
+        dropoffAddress: ride.dropoffAddress,
+        pickupLat: ride.pickupLat.toString(),
+        pickupLng: ride.pickupLng.toString(),
+        dropoffLat: ride.dropoffLat.toString(),
+        dropoffLng: ride.dropoffLng.toString(),
+        estimatedFare: ride.estimatedFare.toString(),
+      };
+      if (ride.rideType === 'HOURLY' && ride.hourlyRide) {
+        base.bookedHours = String(ride.hourlyRide.bookedHours);
+        base.pricePerHour = ride.hourlyRide.pricePerHour.toString();
+        base.estimatedTotal = ride.hourlyRide.estimatedTotal.toString();
+      }
+      return base;
+    };
+
+    const titleAr =
+      ride.rideType === 'HOURLY'
+        ? 'طلب رحلة ساعية جديد'
+        : 'طلب رحلة جديد';
 
     await Promise.all(
       rankedDrivers.map(async (driver) => {
@@ -281,49 +312,29 @@ export class MatchingService {
           },
         });
 
+        const payload = buildPayload(driver.distance.toFixed(2));
+
         if (driverRecord?.user?.fcmToken) {
           try {
-            const payload = {
-              type: 'RIDE_OFFER',
-              rideId: ride.id,
-              distance: driver.distance.toFixed(2),
-              pickupAddress: ride.pickupAddress,
-              dropoffAddress: ride.dropoffAddress,
-              pickupLat: ride.pickupLat.toString(),
-              pickupLng: ride.pickupLng.toString(),
-              dropoffLat: ride.dropoffLat.toString(),
-              dropoffLng: ride.dropoffLng.toString(),
-              estimatedFare: ride.estimatedFare.toString(),
-            };
-
             await this.firebase.sendNotification(
               driverRecord.user.fcmToken,
-              'طلب رحلة جديد',
+              titleAr,
               `نقطة الانطلاق: ${ride.pickupAddress}`,
-              payload
+              payload,
             );
-
-            // Also send via WebSocket directly for faster real-time delivery
-            this.driverGateway.server.to(driver.driverId).emit('ride_offer', payload);
-
+            this.driverGateway.server
+              .to(driver.driverId)
+              .emit('ride_offer', payload);
           } catch (error) {
-            this.logger.error(`Failed to send notification to driver ${driver.driverId}:`, error);
+            this.logger.error(
+              `Failed to send notification to driver ${driver.driverId}:`,
+              error,
+            );
           }
         } else {
-          // If no FCM token, at least try WebSocket
-          const payload = {
-            type: 'RIDE_OFFER',
-            rideId: ride.id,
-            distance: driver.distance.toFixed(2),
-            pickupAddress: ride.pickupAddress,
-            dropoffAddress: ride.dropoffAddress,
-            pickupLat: ride.pickupLat.toString(),
-            pickupLng: ride.pickupLng.toString(),
-            dropoffLat: ride.dropoffLat.toString(),
-            dropoffLng: ride.dropoffLng.toString(),
-            estimatedFare: ride.estimatedFare.toString(),
-          };
-          this.driverGateway.server.to(driver.driverId).emit('ride_offer', payload);
+          this.driverGateway.server
+            .to(driver.driverId)
+            .emit('ride_offer', payload);
         }
       }),
     );

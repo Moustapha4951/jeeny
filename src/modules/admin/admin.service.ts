@@ -874,11 +874,20 @@ export class AdminService {
         where: { id: selectedVehicleTypeId },
       });
       if (vt) {
-        // Default: per-minute rate × 60 for an hourly equivalent.
-        // Caller can override by passing pricePerHour.
-        pricePerHour = Number(vt.pricePerMin) * 60;
-        // Fall back to a sensible floor if pricePerMin is 0.
+        // Prefer the dedicated hourly rate if the employer set one for
+        // this vehicle type. Otherwise fall back to per-minute × 60.
+        if (vt.hourlyRate != null) {
+          pricePerHour = Number(vt.hourlyRate);
+        } else {
+          pricePerHour = Number(vt.pricePerMin) * 60;
+        }
         if (pricePerHour <= 0) pricePerHour = 200;
+        if (vt.supportsHourly === false) {
+          return {
+            success: false,
+            message: 'هذا النوع من المركبات لا يدعم الرحلات الساعية',
+          };
+        }
       } else {
         pricePerHour = 200;
       }

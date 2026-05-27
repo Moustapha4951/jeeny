@@ -775,6 +775,11 @@ model VehicleType {
   basePrice       Decimal  @db.Decimal(10, 2)
   pricePerKm      Decimal  @db.Decimal(6, 2)
   pricePerMin     Decimal  @db.Decimal(6, 2)
+  // Optional dedicated rate for hourly rides. Falls back to pricePerMin × 60
+  // if null. Set per vehicle type from the employer app so each tier has
+  // its own hourly price (e.g. economy 250, premium 500).
+  hourlyRate      Decimal? @db.Decimal(10, 2)
+  supportsHourly  Boolean  @default(true)
   minFare         Decimal  @db.Decimal(10, 2)
   nightPriceMultiplier Decimal @default(1.0) @db.Decimal(3, 2) // After 00:00
   adminCommission Decimal  @default(15.0) @db.Decimal(4, 2) // Percentage

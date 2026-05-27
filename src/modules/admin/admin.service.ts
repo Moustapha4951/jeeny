@@ -209,6 +209,45 @@ export class AdminService {
     };
   }
 
+  /// Reactivate a SUSPENDED or REJECTED driver — flips status back to APPROVED
+  /// so they can come back online. Used when the employer/admin lifts a
+  /// suspension or revives a rejected applicant.
+  async reactivateDriver(id: string) {
+    const driver = await this.prisma.driver.update({
+      where: { id },
+      data: {
+        status: 'APPROVED',
+        approvedAt: new Date(),
+      },
+      include: { user: true },
+    });
+
+    return {
+      success: true,
+      message: 'تم إعادة تفعيل حساب السائق',
+      driver,
+    };
+  }
+
+  /// Lift the client-side daily shift ban (3 cancellations rule). The driver
+  /// app reads `shiftLockClearedAt` from the profile and clears its local
+  /// SharedPreferences lock if the timestamp is newer. Idempotent.
+  async liftShiftLock(id: string) {
+    const driver = await this.prisma.driver.update({
+      where: { id },
+      data: {
+        shiftLockClearedAt: new Date(),
+      },
+      include: { user: true },
+    });
+
+    return {
+      success: true,
+      message: 'تم رفع الإيقاف اليومي عن السائق',
+      driver,
+    };
+  }
+
   async getAllRides() {
     const rides = await this.prisma.ride.findMany({
       include: {

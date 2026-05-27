@@ -54,6 +54,18 @@ export class AdminController {
     return this.adminService.suspendDriver(id, reason);
   }
 
+  // Reactivate a suspended or rejected driver (lift the suspension)
+  @Post('drivers/:id/reactivate')
+  async reactivateDriver(@Param('id') id: string) {
+    return this.adminService.reactivateDriver(id);
+  }
+
+  // Lift the client-side daily shift ban (3 cancellations)
+  @Post('drivers/:id/lift-shift-lock')
+  async liftShiftLock(@Param('id') id: string) {
+    return this.adminService.liftShiftLock(id);
+  }
+
   // Release driver from trip (when ride was deleted from DB)
   @Post('drivers/:id/release')
   async releaseDriver(@Param('id') id: string) {

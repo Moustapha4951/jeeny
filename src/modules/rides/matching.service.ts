@@ -292,6 +292,7 @@ export class MatchingService {
       };
       if (ride.rideType === 'HOURLY' && ride.hourlyRide) {
         base.bookedHours = String(ride.hourlyRide.bookedHours);
+        base.bookedMinutes = String(ride.hourlyRide.bookedMinutes);
         base.pricePerHour = ride.hourlyRide.pricePerHour.toString();
         base.estimatedTotal = ride.hourlyRide.estimatedTotal.toString();
       }

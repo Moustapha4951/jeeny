@@ -765,7 +765,10 @@ export class AdminService {
     pickupLat: number;
     pickupLng: number;
     pickupAddress: string;
-    bookedHours: number;
+    // Either bookedMinutes (preferred, supports 30-min granularity) or
+    // bookedHours (legacy whole-hours). At least one must be > 0.
+    bookedHours?: number;
+    bookedMinutes?: number;
     pricePerHour?: number; // optional override; otherwise pulled from vehicleType.pricePerMin × 60
     vehicleTypeId?: string;
     companyId?: string;
@@ -789,7 +792,8 @@ export class AdminService {
       pickupLat,
       pickupLng,
       pickupAddress,
-      bookedHours,
+      bookedHours: rawHours,
+      bookedMinutes: rawMinutes,
       pricePerHour: overridePricePerHour,
       vehicleTypeId,
       companyId,
@@ -798,12 +802,21 @@ export class AdminService {
       targetDriverIds,
     } = bookingData;
 
-    if (!bookedHours || bookedHours < 1 || bookedHours > 24) {
+    // Resolve total booked minutes: prefer explicit minutes, else fall
+    // back to whole hours × 60. Min 30 min, max 24 h.
+    const totalMinutes = rawMinutes && rawMinutes > 0
+      ? rawMinutes
+      : rawHours
+      ? rawHours * 60
+      : 0;
+    if (!totalMinutes || totalMinutes < 30 || totalMinutes > 24 * 60) {
       return {
         success: false,
-        message: 'يجب أن يكون عدد الساعات بين 1 و 24',
+        message: 'يجب أن تكون المدة بين 30 دقيقة و 24 ساعة',
       };
     }
+    const bookedHoursInt = Math.floor(totalMinutes / 60);
+    const bookedExtraMinutes = totalMinutes % 60;
 
     // ── Resolve consumer (find or create by phone) ──────────────────────
     let consumer = await this.prisma.consumer.findFirst({
@@ -870,7 +883,16 @@ export class AdminService {
         pricePerHour = 200;
       }
     }
-    const estimatedTotal = Number(pricePerHour) * bookedHours;
+    // Estimated total: per-minute rate × total minutes (handles 30-min
+    // bookings cleanly without rounding up to a whole hour).
+    const estimatedTotal = (Number(pricePerHour) / 60) * totalMinutes;
+
+    // Helpful Arabic label for the booked window — used in driver notes.
+    const durationLabel = bookedExtraMinutes === 0
+      ? `${bookedHoursInt} ساعة`
+      : bookedHoursInt === 0
+      ? `${bookedExtraMinutes} دقيقة`
+      : `${bookedHoursInt} ساعة و ${bookedExtraMinutes} دقيقة`;
 
     // ── Create Ride + HourlyRide in one transaction ─────────────────────
     // The Ride model requires a dropoff; for hourly we re-use the pickup
@@ -891,20 +913,20 @@ export class AdminService {
           dropoffLng: pickupLng,
           dropoffAddress: pickupAddress,
           distanceKm: 0,
-          durationMin: bookedHours * 60,
+          durationMin: totalMinutes,
           estimatedFare: estimatedTotal,
           bookingSource: 'CALL_CENTER',
           paymentMethod: 'CASH',
           driverNotes:
-            driverNotes ?? `رحلة ساعية: ${bookedHours} ساعة • ${estimatedTotal.toFixed(0)} MRU`,
+            driverNotes ?? `رحلة ساعية: ${durationLabel} • ${estimatedTotal.toFixed(0)} MRU`,
         },
       });
 
       const hourly = await tx.hourlyRide.create({
         data: {
           rideId: ride.id,
-          bookedHours,
-          bookedMinutes: 0,
+          bookedHours: bookedHoursInt,
+          bookedMinutes: bookedExtraMinutes,
           pricePerHour: pricePerHour as any,
           estimatedTotal: estimatedTotal as any,
         },
@@ -950,7 +972,9 @@ export class AdminService {
         id: result.ride.id,
         rideNumber: result.ride.rideNumber,
         rideType: 'HOURLY',
-        bookedHours,
+        bookedHours: bookedHoursInt,
+        bookedMinutes: bookedExtraMinutes,
+        totalMinutes,
         pricePerHour: Number(pricePerHour),
         estimatedFare: estimatedTotal,
       },

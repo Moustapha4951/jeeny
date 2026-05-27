@@ -276,32 +276,33 @@ export class MatchingService {
     // Build the static portion of the offer payload once. Driver-specific
     // distance is added per recipient. All values are strings because FCM
     // data payloads must be string-only.
+    //
+    // For OPEN/HOURLY rides we deliberately omit booked-hours, prices,
+    // and the fake destination — the driver shouldn't see the money or
+    // any dropoff context. They only know it's an open ride.
     const buildPayload = (distanceKm: string) => {
-      const base: Record<string, string> = {
+      const isHourly = ride.rideType === 'HOURLY';
+      const out: Record<string, string> = {
         type: 'RIDE_OFFER',
         rideId: ride.id,
         rideType: ride.rideType, // CITY | SCHEDULED | HOURLY
         distance: distanceKm,
         pickupAddress: ride.pickupAddress,
-        dropoffAddress: ride.dropoffAddress,
         pickupLat: ride.pickupLat.toString(),
         pickupLng: ride.pickupLng.toString(),
-        dropoffLat: ride.dropoffLat.toString(),
-        dropoffLng: ride.dropoffLng.toString(),
-        estimatedFare: ride.estimatedFare.toString(),
       };
-      if (ride.rideType === 'HOURLY' && ride.hourlyRide) {
-        base.bookedHours = String(ride.hourlyRide.bookedHours);
-        base.bookedMinutes = String(ride.hourlyRide.bookedMinutes);
-        base.pricePerHour = ride.hourlyRide.pricePerHour.toString();
-        base.estimatedTotal = ride.hourlyRide.estimatedTotal.toString();
+      if (!isHourly) {
+        out.dropoffAddress = ride.dropoffAddress;
+        out.dropoffLat = ride.dropoffLat.toString();
+        out.dropoffLng = ride.dropoffLng.toString();
+        out.estimatedFare = ride.estimatedFare.toString();
       }
-      return base;
+      return out;
     };
 
     const titleAr =
       ride.rideType === 'HOURLY'
-        ? 'طلب رحلة ساعية جديد'
+        ? 'طلب رحلة مفتوحة جديد'
         : 'طلب رحلة جديد';
 
     await Promise.all(

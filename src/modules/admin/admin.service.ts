@@ -793,21 +793,17 @@ export class AdminService {
     };
   }
 
-  /// Book an hourly / "open" ride. Customer pays for time, not distance.
-  /// We persist a Ride row (rideType=HOURLY) plus a HourlyRide companion
-  /// row that tracks the booked hours and price-per-hour. The standard
-  /// matching service is reused so the offer reaches drivers identically.
+  /// Book an "open" ride — driver hires the car for an open-ended trip.
+  /// No fixed destination, no estimated duration, no upfront fare. The
+  /// meter bills time when stopped + distance when moving, and only the
+  /// employer's live tracking screen ever surfaces a running total. The
+  /// driver sees nothing about price until the ride ends.
   async bookHourlyRide(bookingData: {
     customerPhone: string;
     customerName?: string;
     pickupLat: number;
     pickupLng: number;
     pickupAddress: string;
-    // Either bookedMinutes (preferred, supports 30-min granularity) or
-    // bookedHours (legacy whole-hours). At least one must be > 0.
-    bookedHours?: number;
-    bookedMinutes?: number;
-    pricePerHour?: number; // optional override; otherwise pulled from vehicleType.pricePerMin × 60
     vehicleTypeId?: string;
     companyId?: string;
     driverNotes?: string;
@@ -830,31 +826,12 @@ export class AdminService {
       pickupLat,
       pickupLng,
       pickupAddress,
-      bookedHours: rawHours,
-      bookedMinutes: rawMinutes,
-      pricePerHour: overridePricePerHour,
       vehicleTypeId,
       companyId,
       driverNotes,
       strategy,
       targetDriverIds,
     } = bookingData;
-
-    // Resolve total booked minutes: prefer explicit minutes, else fall
-    // back to whole hours × 60. Min 30 min, max 24 h.
-    const totalMinutes = rawMinutes && rawMinutes > 0
-      ? rawMinutes
-      : rawHours
-      ? rawHours * 60
-      : 0;
-    if (!totalMinutes || totalMinutes < 30 || totalMinutes > 24 * 60) {
-      return {
-        success: false,
-        message: 'يجب أن تكون المدة بين 30 دقيقة و 24 ساعة',
-      };
-    }
-    const bookedHoursInt = Math.floor(totalMinutes / 60);
-    const bookedExtraMinutes = totalMinutes % 60;
 
     // ── Resolve consumer (find or create by phone) ──────────────────────
     let consumer = await this.prisma.consumer.findFirst({
@@ -905,65 +882,30 @@ export class AdminService {
       return { success: false, message: 'لا يوجد نوع مركبة متاح' };
     }
 
-    // ── Compute pricing ─────────────────────────────────────────────────
-    let pricePerHour = overridePricePerHour;
-    let pricePerKm: number | null = null;
-    if (!pricePerHour) {
-      const vt = await this.prisma.vehicleType.findUnique({
-        where: { id: selectedVehicleTypeId },
-      });
-      if (vt) {
-        // Prefer the dedicated hourly rate if the employer set one for
-        // this vehicle type. Otherwise fall back to per-minute × 60.
-        if (vt.hourlyRate != null) {
-          pricePerHour = Number(vt.hourlyRate);
-        } else {
-          pricePerHour = Number(vt.pricePerMin) * 60;
-        }
-        if (pricePerHour <= 0) pricePerHour = 200;
-        if (vt.supportsHourly === false) {
-          return {
-            success: false,
-            message: 'هذا النوع من المركبات لا يدعم الرحلات الساعية',
-          };
-        }
-        // Take the per-km rate from the same vehicle type — used by the
-        // hybrid meter (bills distance when the driver is moving).
-        pricePerKm = Number(vt.pricePerKm);
-      } else {
-        pricePerHour = 200;
-      }
-    } else {
-      // Employer passed an override hourly rate. Look up the per-km
-      // separately so the meter still has it.
-      const vt = await this.prisma.vehicleType.findUnique({
-        where: { id: selectedVehicleTypeId },
-      });
-      if (vt) {
-        pricePerKm = Number(vt.pricePerKm);
-        if (vt.supportsHourly === false) {
-          return {
-            success: false,
-            message: 'هذا النوع من المركبات لا يدعم الرحلات الساعية',
-          };
-        }
-      }
+    // ── Resolve meter rates from the vehicle type ───────────────────────
+    const vt = await this.prisma.vehicleType.findUnique({
+      where: { id: selectedVehicleTypeId },
+    });
+    if (!vt) {
+      return { success: false, message: 'نوع المركبة غير موجود' };
     }
-    // Estimated total: per-minute rate × total minutes (handles 30-min
-    // bookings cleanly without rounding up to a whole hour).
-    const estimatedTotal = (Number(pricePerHour) / 60) * totalMinutes;
-
-    // Helpful Arabic label for the booked window — used in driver notes.
-    const durationLabel = bookedExtraMinutes === 0
-      ? `${bookedHoursInt} ساعة`
-      : bookedHoursInt === 0
-      ? `${bookedExtraMinutes} دقيقة`
-      : `${bookedHoursInt} ساعة و ${bookedExtraMinutes} دقيقة`;
+    if (vt.supportsHourly === false) {
+      return {
+        success: false,
+        message: 'هذا النوع من المركبات لا يدعم الرحلات المفتوحة',
+      };
+    }
+    const pricePerHour = vt.hourlyRate != null
+      ? Number(vt.hourlyRate)
+      : Number(vt.pricePerMin) * 60;
+    const pricePerKm = vt.hourlyPricePerKm != null
+      ? Number(vt.hourlyPricePerKm)
+      : Number(vt.pricePerKm);
 
     // ── Create Ride + HourlyRide in one transaction ─────────────────────
-    // The Ride model requires a dropoff; for hourly we re-use the pickup
-    // coords/address since there's no real destination. The driver app
-    // shows a "ساعية" badge instead of a dropoff line.
+    // For an open ride: no destination, no estimated total, no booked
+    // duration. The Ride model requires dropoff coords so we mirror the
+    // pickup; the driver UI hides the dropoff line entirely.
     const result = await this.prisma.$transaction(async (tx) => {
       const ride = await tx.ride.create({
         data: {
@@ -979,23 +921,23 @@ export class AdminService {
           dropoffLng: pickupLng,
           dropoffAddress: pickupAddress,
           distanceKm: 0,
-          durationMin: totalMinutes,
-          estimatedFare: estimatedTotal,
+          durationMin: 0,
+          estimatedFare: 0, // open ride — no upfront estimate
           bookingSource: 'CALL_CENTER',
           paymentMethod: 'CASH',
           driverNotes:
-            driverNotes ?? `رحلة ساعية: ${durationLabel} • ${estimatedTotal.toFixed(0)} MRU`,
+            driverNotes ?? 'رحلة مفتوحة — تُحسب الأجرة بعد إنهاء الرحلة',
         },
       });
 
       const hourly = await tx.hourlyRide.create({
         data: {
           rideId: ride.id,
-          bookedHours: bookedHoursInt,
-          bookedMinutes: bookedExtraMinutes,
+          bookedHours: 0,
+          bookedMinutes: 0,
           pricePerHour: pricePerHour as any,
           pricePerKm: pricePerKm as any,
-          estimatedTotal: estimatedTotal as any,
+          estimatedTotal: 0 as any,
         },
       });
 
@@ -1029,21 +971,16 @@ export class AdminService {
         },
       )
       .catch((e) =>
-        console.error('Error finding drivers for hourly ride:', e),
+        console.error('Error finding drivers for open ride:', e),
       );
 
     return {
       success: true,
-      message: 'تم إنشاء الرحلة الساعية بنجاح',
+      message: 'تم إنشاء الرحلة المفتوحة بنجاح',
       ride: {
         id: result.ride.id,
         rideNumber: result.ride.rideNumber,
         rideType: 'HOURLY',
-        bookedHours: bookedHoursInt,
-        bookedMinutes: bookedExtraMinutes,
-        totalMinutes,
-        pricePerHour: Number(pricePerHour),
-        estimatedFare: estimatedTotal,
       },
     };
   }
@@ -1420,6 +1357,11 @@ export class AdminService {
         icon: data.icon !== undefined ? data.icon : vehicleType.icon,
         isActive: data.isActive !== undefined ? data.isActive : vehicleType.isActive,
         supportsIntercity: data.supportsIntercity !== undefined ? data.supportsIntercity : vehicleType.supportsIntercity,
+        // Open-ride / hourly pricing — separate per-hour (idle) and per-km
+        // (moving) rates. null means "fall back to pricePerMin*60 / pricePerKm".
+        hourlyRate: data.hourlyRate !== undefined ? data.hourlyRate : vehicleType.hourlyRate,
+        hourlyPricePerKm: data.hourlyPricePerKm !== undefined ? data.hourlyPricePerKm : vehicleType.hourlyPricePerKm,
+        supportsHourly: data.supportsHourly !== undefined ? data.supportsHourly : vehicleType.supportsHourly,
       },
     });
 

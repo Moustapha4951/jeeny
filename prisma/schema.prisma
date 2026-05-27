@@ -2177,21 +2177,42 @@ model HourlyRide {
   packageId       String?
   bookedHours     Int
   bookedMinutes   Int           @default(0)
+  // Pricing model. Hourly rides charge BOTH for time spent (when stopped or
+  // moving slowly) AND for distance (when actually moving). The driver app
+  // pings the backend with each new GPS sample; the backend decides which
+  // bucket the segment goes into based on speed.
   pricePerHour    Decimal       @db.Decimal(10, 2)
+  pricePerKm      Decimal?      @db.Decimal(8, 2)
+  // Speed (km/h) below which the segment is billed as time. At/above we
+  // bill it as distance. Default 5 km/h ≈ slow traffic / parked.
+  movingThresholdKmh Decimal    @default(5.0) @db.Decimal(5, 2)
   estimatedTotal  Decimal       @db.Decimal(10, 2)
-  
-  // Actual usage
+
+  // Live counters — updated as the driver pings location while on the trip.
+  // Time spent below the moving threshold (parked / very slow traffic).
+  idleSeconds     Int           @default(0)
+  // Distance covered above the moving threshold (real driving).
+  movingKm        Decimal       @default(0) @db.Decimal(10, 3)
+  // Running total fare so far. Driver's app shows nothing until the ride
+  // ends; the employer dashboard can poll this for live tracking.
+  runningTotal    Decimal       @default(0) @db.Decimal(10, 2)
+  // Last GPS sample we used for delta calculation.
+  lastSampleAt    DateTime?
+  lastLat         Decimal?      @db.Decimal(10, 8)
+  lastLng         Decimal?      @db.Decimal(11, 8)
+
+  // Final accounting (filled at end-of-ride)
   actualMinutes   Int?
   actualTotal     Decimal?      @db.Decimal(10, 2)
   extraMinutes    Int           @default(0)
   extraCharge     Decimal       @default(0) @db.Decimal(10, 2)
-  
+
   startedAt       DateTime?
   endedAt         DateTime?
   createdAt       DateTime      @default(now())
-  
+
   ride            Ride          @relation(fields: [rideId], references: [id])
-  
+
   @@index([rideId])
 }
 

@@ -203,10 +203,108 @@ export class DriverService {
 
     // Update location in database (no Redis needed)
     await this.locationService.updateDriverLocation(userId, latitude, longitude);
-    
-    console.log(`✅ Driver ${userId} location updated: (${latitude}, ${longitude})`);
+
+    // If the driver is on an HOURLY ride that's IN_PROGRESS, accumulate
+    // the meter using this sample. Best-effort — failure here must not
+    // break the location ping.
+    try {
+      const activeRide = await this.prisma.ride.findFirst({
+        where: {
+          driverId: driver.id,
+          status: 'IN_PROGRESS',
+          rideType: 'HOURLY',
+        },
+        select: { id: true },
+      });
+      if (activeRide) {
+        await this.accumulateHourlyMeter(activeRide.id, latitude, longitude);
+      }
+    } catch (e) {
+      console.error('Hourly meter accumulate failed:', e);
+    }
 
     return { success: true };
+  }
+
+  /// Apply a new GPS sample to the running hourly meter:
+  ///   • Compute time delta and distance delta since the last sample.
+  ///   • If average speed ≥ movingThreshold → bill the segment as distance.
+  ///   • Otherwise → bill the time delta as idle minutes.
+  /// Updates the HourlyRide row's running counters and total fare.
+  private async accumulateHourlyMeter(
+    rideId: string,
+    lat: number,
+    lng: number,
+  ) {
+    const hourly = await this.prisma.hourlyRide.findUnique({
+      where: { rideId },
+    });
+    if (!hourly || !hourly.startedAt || hourly.endedAt) return;
+
+    const now = new Date();
+    const lastAt = hourly.lastSampleAt ?? hourly.startedAt;
+    const elapsedSeconds = Math.max(
+      0,
+      Math.floor((now.getTime() - lastAt.getTime()) / 1000),
+    );
+    if (elapsedSeconds <= 0) {
+      // No-op sample, just stamp the position so we have a baseline.
+      await this.prisma.hourlyRide.update({
+        where: { rideId },
+        data: {
+          lastSampleAt: now,
+          lastLat: lat as any,
+          lastLng: lng as any,
+        },
+      });
+      return;
+    }
+    // Cap any single segment at 5 minutes — protects against bad timestamps
+    // (e.g. driver app went to sleep and resumed) inflating idle time.
+    const cappedSeconds = Math.min(elapsedSeconds, 5 * 60);
+
+    let segmentKm = 0;
+    if (hourly.lastLat != null && hourly.lastLng != null) {
+      segmentKm = haversineKm(
+        Number(hourly.lastLat),
+        Number(hourly.lastLng),
+        lat,
+        lng,
+      );
+    }
+    const speedKmh = cappedSeconds > 0
+      ? (segmentKm / (cappedSeconds / 3600))
+      : 0;
+    const threshold = Number(hourly.movingThresholdKmh) || 5;
+
+    let addIdleSeconds = 0;
+    let addMovingKm = 0;
+    let addCharge = 0;
+
+    if (speedKmh >= threshold && segmentKm > 0) {
+      // Driving — bill by distance.
+      const perKm =
+        hourly.pricePerKm != null ? Number(hourly.pricePerKm) : 0;
+      addMovingKm = segmentKm;
+      addCharge = perKm * segmentKm;
+    } else {
+      // Stopped or crawling — bill by time.
+      const perMinute = Number(hourly.pricePerHour) / 60;
+      addIdleSeconds = cappedSeconds;
+      addCharge = perMinute * (cappedSeconds / 60);
+    }
+
+    await this.prisma.hourlyRide.update({
+      where: { rideId },
+      data: {
+        idleSeconds: { increment: addIdleSeconds },
+        movingKm: { increment: addMovingKm } as any,
+        runningTotal: { increment: addCharge } as any,
+        lastSampleAt: now,
+        lastLat: lat as any,
+        lastLng: lng as any,
+      },
+    });
   }
 
   async toggleAvailability(userId: string, isOnline: boolean) {
@@ -555,13 +653,26 @@ export class DriverService {
     });
 
     // For hourly rides: stamp startedAt on the HourlyRide row so the
-    // meter begins now. We do this best-effort — failure should not
-    // block the ride start.
+    // meter begins now. Also seed the baseline GPS sample with the
+    // driver's current location so the next location ping has a valid
+    // delta to compute against.
     if (ride.rideType === 'HOURLY') {
       try {
+        const driverLoc = await this.prisma.driver.findUnique({
+          where: { id: driver.id },
+          select: { currentLat: true, currentLng: true },
+        });
         await this.prisma.hourlyRide.update({
           where: { rideId },
-          data: { startedAt: new Date() },
+          data: {
+            startedAt: new Date(),
+            lastSampleAt: new Date(),
+            lastLat: driverLoc?.currentLat ?? null,
+            lastLng: driverLoc?.currentLng ?? null,
+            runningTotal: 0 as any,
+            idleSeconds: 0,
+            movingKm: 0 as any,
+          },
         });
       } catch (e) {
         console.error('Failed to stamp hourlyRide.startedAt:', e);
@@ -634,15 +745,25 @@ export class DriverService {
             1,
             Math.round((endedAt.getTime() - startedAt.getTime()) / 60000),
           );
+
+          // The meter has been accumulating in `runningTotal` as the driver
+          // moved/stopped. Use that as the actual total — it already
+          // reflects idle minutes × per-minute and moving km × per-km.
+          // If for some reason runningTotal is 0 (e.g. no GPS pings) fall
+          // back to the simple time-only charge.
+          const minute = Number(hourly.pricePerHour) / 60;
+          const fallbackTotal = minute * actualMinutes;
+          const actualTotal = Number(hourly.runningTotal) > 0
+            ? Number(hourly.runningTotal)
+            : fallbackTotal;
+
+          // For information only — not used to charge again.
           const bookedTotalMinutes =
             hourly.bookedHours * 60 + hourly.bookedMinutes;
           const extraMinutes = Math.max(
             0,
             actualMinutes - bookedTotalMinutes,
           );
-          const pricePerMinute = Number(hourly.pricePerHour) / 60;
-          const extraCharge = extraMinutes * pricePerMinute;
-          const actualTotal = Number(hourly.estimatedTotal) + extraCharge;
 
           await this.prisma.hourlyRide.update({
             where: { rideId },
@@ -650,7 +771,7 @@ export class DriverService {
               actualMinutes,
               actualTotal: actualTotal as any,
               extraMinutes,
-              extraCharge: extraCharge as any,
+              extraCharge: 0 as any, // already part of runningTotal
               endedAt,
             },
           });
@@ -1149,4 +1270,27 @@ export class DriverService {
       },
     };
   }
+}
+
+
+// ─── Helpers ───────────────────────────────────────────────────────────────
+
+/// Great-circle distance in kilometers between two GPS coords.
+function haversineKm(
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number,
+): number {
+  const r = 6371; // earth radius km
+  const toRad = (v: number) => (v * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) *
+      Math.cos(toRad(lat2)) *
+      Math.sin(dLng / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return r * c;
 }

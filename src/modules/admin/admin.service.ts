@@ -334,6 +334,7 @@ export class AdminService {
         },
         vehicleType: true,
         vehicle: true,
+        hourlyRide: true,
       },
     });
 
@@ -418,6 +419,43 @@ export class AdminService {
       cancelledBy: ride.cancelledBy,
       riderNotes: ride.riderNotes,
       driverNotes: ride.driverNotes,
+
+      // Driver's last known location (for live tracking on hourly rides)
+      driverLocation: ride.driver?.currentLat != null
+        ? {
+            latitude: Number(ride.driver.currentLat),
+            longitude: Number(ride.driver.currentLng),
+            updatedAt: ride.driver.lastLocationAt,
+            heading: ride.driver.heading
+              ? Number(ride.driver.heading)
+              : null,
+          }
+        : null,
+
+      // Hourly ride telemetry (null for non-hourly rides)
+      hourly: ride.hourlyRide
+        ? {
+            rideType: 'HOURLY',
+            bookedHours: ride.hourlyRide.bookedHours,
+            bookedMinutes: ride.hourlyRide.bookedMinutes,
+            pricePerHour: Number(ride.hourlyRide.pricePerHour),
+            pricePerKm: ride.hourlyRide.pricePerKm
+              ? Number(ride.hourlyRide.pricePerKm)
+              : null,
+            estimatedTotal: Number(ride.hourlyRide.estimatedTotal),
+            // Live counters
+            idleSeconds: ride.hourlyRide.idleSeconds,
+            movingKm: Number(ride.hourlyRide.movingKm),
+            runningTotal: Number(ride.hourlyRide.runningTotal),
+            startedAt: ride.hourlyRide.startedAt,
+            endedAt: ride.hourlyRide.endedAt,
+            // Final accounting
+            actualMinutes: ride.hourlyRide.actualMinutes,
+            actualTotal: ride.hourlyRide.actualTotal
+              ? Number(ride.hourlyRide.actualTotal)
+              : null,
+          }
+        : null,
     };
   }
 
@@ -869,6 +907,7 @@ export class AdminService {
 
     // ── Compute pricing ─────────────────────────────────────────────────
     let pricePerHour = overridePricePerHour;
+    let pricePerKm: number | null = null;
     if (!pricePerHour) {
       const vt = await this.prisma.vehicleType.findUnique({
         where: { id: selectedVehicleTypeId },
@@ -888,8 +927,26 @@ export class AdminService {
             message: 'هذا النوع من المركبات لا يدعم الرحلات الساعية',
           };
         }
+        // Take the per-km rate from the same vehicle type — used by the
+        // hybrid meter (bills distance when the driver is moving).
+        pricePerKm = Number(vt.pricePerKm);
       } else {
         pricePerHour = 200;
+      }
+    } else {
+      // Employer passed an override hourly rate. Look up the per-km
+      // separately so the meter still has it.
+      const vt = await this.prisma.vehicleType.findUnique({
+        where: { id: selectedVehicleTypeId },
+      });
+      if (vt) {
+        pricePerKm = Number(vt.pricePerKm);
+        if (vt.supportsHourly === false) {
+          return {
+            success: false,
+            message: 'هذا النوع من المركبات لا يدعم الرحلات الساعية',
+          };
+        }
       }
     }
     // Estimated total: per-minute rate × total minutes (handles 30-min
@@ -937,6 +994,7 @@ export class AdminService {
           bookedHours: bookedHoursInt,
           bookedMinutes: bookedExtraMinutes,
           pricePerHour: pricePerHour as any,
+          pricePerKm: pricePerKm as any,
           estimatedTotal: estimatedTotal as any,
         },
       });

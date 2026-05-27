@@ -91,7 +91,7 @@ export class FirebaseService implements OnModuleInit {
             android: {
               priority: 'high',
               notification: {
-                channelId: 'masar_driver_channel_v3',
+                channelId: 'masar_driver_channel_v2',
                 priority: 'high',
                 sound: 'masar_notification',
                 defaultVibrateTimings: true,
@@ -130,23 +130,6 @@ export class FirebaseService implements OnModuleInit {
           body,
         },
         data,
-        android: {
-          priority: 'high',
-          notification: {
-            channelId: 'masar_driver_channel_v3',
-            priority: 'high',
-            sound: 'masar_notification',
-            defaultVibrateTimings: true,
-          },
-        },
-        apns: {
-          payload: {
-            aps: {
-              sound: 'masar_notification.mp3',
-              badge: 1,
-            },
-          },
-        },
       };
 
       const response = await this.getMessaging().sendEachForMulticast(message);

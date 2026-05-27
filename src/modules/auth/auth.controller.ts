@@ -204,9 +204,9 @@ export class AuthController {
       return { success: false, message: 'البريد الإلكتروني أو كلمة المرور غير صحيحة' };
     }
 
-    // Check password — for employer accounts (v1), password may be stored
-    // in `passwordHash` (preferred) or the legacy `fcmToken` slot.
-    const storedPassword = user.passwordHash ?? user.fcmToken;
+    // Check password — for employer accounts (v1), password is stored in fcmToken field
+    // (employer users don't receive push notifications so this field is repurposed)
+    const storedPassword = user.fcmToken;
     if (!storedPassword || storedPassword !== password) {
       return { success: false, message: 'البريد الإلكتروني أو كلمة المرور غير صحيحة' };
     }

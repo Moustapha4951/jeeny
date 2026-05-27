@@ -278,11 +278,32 @@ export class DriverService {
         );
       }
 
-      // 4. Check for expired documents
-      const expiredDocs = approvedDocs.filter(doc => doc.expiresAt && new Date(doc.expiresAt) < new Date());
+      // 4. Check for expired documents — only flag docs that EXPIRED
+      // BEFORE the start of today (so a doc that says "expires today" is
+      // still valid for the rest of the day).
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
+      const expiredDocs = approvedDocs.filter(
+        (doc) => doc.expiresAt && new Date(doc.expiresAt) < startOfToday,
+      );
       if (expiredDocs.length > 0) {
+        const labelFor = (t: string) => {
+          switch (t) {
+            case 'LICENSE':
+              return 'رخصة القيادة';
+            case 'NATIONAL_ID':
+              return 'البطاقة الوطنية';
+            case 'VEHICLE_REG':
+              return 'استمارة المركبة';
+            case 'INSURANCE':
+              return 'التأمين';
+            default:
+              return t;
+          }
+        };
+        const names = expiredDocs.map((d) => labelFor(d.type)).join('، ');
         throw new BadRequestException(
-          'One or more required documents have expired. Please update them.',
+          `انتهت صلاحية: ${names}. يرجى تجديدها من شاشة المستندات.`,
         );
       }
       
@@ -293,8 +314,13 @@ export class DriverService {
       if (!vehicle || vehicle.status !== 'APPROVED') {
         throw new BadRequestException('Your vehicle is not approved yet.');
       }
-      if (vehicle.registrationExpiry && new Date(vehicle.registrationExpiry) < new Date()) {
-        throw new BadRequestException('Your vehicle registration has expired. Please update it.');
+      if (
+        vehicle.registrationExpiry &&
+        new Date(vehicle.registrationExpiry) < startOfToday
+      ) {
+        throw new BadRequestException(
+          'انتهت صلاحية تسجيل المركبة. يرجى تحديث استمارة المركبة من شاشة المستندات.',
+        );
       }
     }
 
@@ -940,11 +966,21 @@ export class DriverService {
       });
 
       if (vehicle) {
+        // When a new VEHICLE_REG is uploaded with an expiry date, sync the
+        // expiry onto the Vehicle record too — it's a separate column from
+        // the Document, and the go-online check reads from Vehicle.
+        const updateData: Record<string, any> = {
+          [vehicleFieldMap[documentType]]: fileUrl,
+        };
+        if (
+          documentType === DocumentType.VEHICLE_REG &&
+          expiresAt
+        ) {
+          updateData.registrationExpiry = new Date(expiresAt);
+        }
         await this.prisma.vehicle.update({
           where: { id: vehicle.id },
-          data: {
-            [vehicleFieldMap[documentType]]: fileUrl,
-          },
+          data: updateData,
         });
       }
     }

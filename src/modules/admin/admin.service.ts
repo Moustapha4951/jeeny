@@ -1394,6 +1394,26 @@ export class AdminService {
       });
     }
 
+    // When VEHICLE_REG is approved with an expiry, sync the expiry to the
+    // Vehicle record so the go-online check sees the new date instead of
+    // an old (possibly expired) one.
+    if (document.type === 'VEHICLE_REG' && document.expiresAt) {
+      const driver = await this.prisma.driver.findUnique({
+        where: { userId: document.userId },
+      });
+      if (driver) {
+        const vehicle = await this.prisma.vehicle.findFirst({
+          where: { driverId: driver.id },
+        });
+        if (vehicle) {
+          await this.prisma.vehicle.update({
+            where: { id: vehicle.id },
+            data: { registrationExpiry: document.expiresAt },
+          });
+        }
+      }
+    }
+
     // Send FCM notification
     if (document.user.fcmToken) {
       const docTypeArabic = {

@@ -15,7 +15,8 @@ export class OtpService {
   ) {}
 
   generateOTP(): string {
-    return Math.floor(100000 + Math.random() * 900000).toString();
+    // 4-digit OTP, zero-padded so it's always exactly 4 chars.
+    return Math.floor(Math.random() * 10000).toString().padStart(4, '0');
   }
 
   async sendOTP(phoneNumber: string): Promise<void> {

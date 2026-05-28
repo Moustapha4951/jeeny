@@ -275,20 +275,25 @@ export class DriverService {
     const speedKmh = cappedSeconds > 0
       ? (segmentKm / (cappedSeconds / 3600))
       : 0;
+    // Reject obvious GPS jumps. A taxi can't physically be doing more
+    // than ~120 km/h, so anything beyond that is almost certainly a bad
+    // fix (urban canyon, indoors, cold start). Bill the segment as
+    // idle time but don't credit the phantom kilometers.
+    const jumpDetected = speedKmh > 120;
     const threshold = Number(hourly.movingThresholdKmh) || 5;
 
     let addIdleSeconds = 0;
     let addMovingKm = 0;
     let addCharge = 0;
 
-    if (speedKmh >= threshold && segmentKm > 0) {
+    if (!jumpDetected && speedKmh >= threshold && segmentKm > 0) {
       // Driving — bill by distance.
       const perKm =
         hourly.pricePerKm != null ? Number(hourly.pricePerKm) : 0;
       addMovingKm = segmentKm;
       addCharge = perKm * segmentKm;
     } else {
-      // Stopped or crawling — bill by time.
+      // Stopped, crawling, or GPS jump — bill by time only.
       const perMinute = Number(hourly.pricePerHour) / 60;
       addIdleSeconds = cappedSeconds;
       addCharge = perMinute * (cappedSeconds / 60);

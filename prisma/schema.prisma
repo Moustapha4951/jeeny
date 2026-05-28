@@ -2184,6 +2184,7 @@ model HourlyRide {
   // moving slowly) AND for distance (when actually moving). The driver app
   // pings the backend with each new GPS sample; the backend decides which
   // bucket the segment goes into based on speed.
+  basePrice       Decimal       @default(0) @db.Decimal(10, 2)
   pricePerHour    Decimal       @db.Decimal(10, 2)
   pricePerKm      Decimal?      @db.Decimal(8, 2)
   // Speed (km/h) below which the segment is billed as time. At/above we

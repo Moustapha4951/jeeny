@@ -432,24 +432,22 @@ export class AdminService {
           }
         : null,
 
-      // Hourly ride telemetry (null for non-hourly rides)
       hourly: ride.hourlyRide
         ? {
             rideType: 'HOURLY',
             bookedHours: ride.hourlyRide.bookedHours,
             bookedMinutes: ride.hourlyRide.bookedMinutes,
+            basePrice: Number(ride.hourlyRide.basePrice),
             pricePerHour: Number(ride.hourlyRide.pricePerHour),
             pricePerKm: ride.hourlyRide.pricePerKm
               ? Number(ride.hourlyRide.pricePerKm)
               : null,
             estimatedTotal: Number(ride.hourlyRide.estimatedTotal),
-            // Live counters
             idleSeconds: ride.hourlyRide.idleSeconds,
             movingKm: Number(ride.hourlyRide.movingKm),
             runningTotal: Number(ride.hourlyRide.runningTotal),
             startedAt: ride.hourlyRide.startedAt,
             endedAt: ride.hourlyRide.endedAt,
-            // Final accounting
             actualMinutes: ride.hourlyRide.actualMinutes,
             actualTotal: ride.hourlyRide.actualTotal
               ? Number(ride.hourlyRide.actualTotal)
@@ -901,11 +899,8 @@ export class AdminService {
     const pricePerKm = vt.hourlyPricePerKm != null
       ? Number(vt.hourlyPricePerKm)
       : Number(vt.pricePerKm);
+    const basePrice = Number(vt.basePrice);
 
-    // ── Create Ride + HourlyRide in one transaction ─────────────────────
-    // For an open ride: no destination, no estimated total, no booked
-    // duration. The Ride model requires dropoff coords so we mirror the
-    // pickup; the driver UI hides the dropoff line entirely.
     const result = await this.prisma.$transaction(async (tx) => {
       const ride = await tx.ride.create({
         data: {
@@ -922,11 +917,10 @@ export class AdminService {
           dropoffAddress: pickupAddress,
           distanceKm: 0,
           durationMin: 0,
-          estimatedFare: 0, // open ride — no upfront estimate
+          estimatedFare: 0,
           bookingSource: 'CALL_CENTER',
           paymentMethod: 'CASH',
-          driverNotes:
-            driverNotes ?? 'رحلة مفتوحة — تُحسب الأجرة بعد إنهاء الرحلة',
+          driverNotes: driverNotes ?? null,
         },
       });
 
@@ -935,9 +929,13 @@ export class AdminService {
           rideId: ride.id,
           bookedHours: 0,
           bookedMinutes: 0,
+          basePrice: basePrice as any,
           pricePerHour: pricePerHour as any,
           pricePerKm: pricePerKm as any,
           estimatedTotal: 0 as any,
+          // Seed the running total with the base price so the meter
+          // starts from there as soon as the trip begins.
+          runningTotal: basePrice as any,
         },
       });
 

@@ -142,6 +142,14 @@ export class DriverController {
     return this.driverService.getActiveRides(req.user.id);
   }
 
+  @Get('rides/:rideId/meter')
+  async getRideMeter(
+    @Request() req: any,
+    @Param('rideId') rideId: string,
+  ) {
+    return this.driverService.getHourlyMeter(req.user.id, rideId);
+  }
+
   @Get('rides/history')
   async getRideHistory(
     @Request() req: any,

@@ -471,6 +471,33 @@ export class DriverService {
     return { rides };
   }
 
+  async getHourlyMeter(userId: string, rideId: string) {
+    const driver = await this.prisma.driver.findUnique({
+      where: { userId },
+      select: { id: true },
+    });
+    if (!driver) throw new NotFoundException('Driver not found');
+
+    const ride = await this.prisma.ride.findUnique({
+      where: { id: rideId },
+      select: { driverId: true, hourlyRide: true },
+    });
+    if (!ride || ride.driverId !== driver.id) {
+      throw new NotFoundException('Ride not found');
+    }
+    const h = ride.hourlyRide;
+    if (!h) {
+      return { runningTotal: 0, idleSeconds: 0, movingKm: 0 };
+    }
+    return {
+      runningTotal: Number(h.runningTotal),
+      basePrice: Number(h.basePrice),
+      idleSeconds: h.idleSeconds,
+      movingKm: Number(h.movingKm),
+      startedAt: h.startedAt,
+    };
+  }
+
   async getRideHistory(userId: string, page: number, limit: number) {
     const driver = await this.prisma.driver.findUnique({
       where: { userId },

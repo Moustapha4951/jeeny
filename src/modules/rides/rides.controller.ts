@@ -30,6 +30,19 @@ export class RidesController {
     );
   }
 
+  @Post('nearby-drivers')
+  async getNearbyDrivers(@Body() body: {
+    pickupLat: number;
+    pickupLng: number;
+    vehicleTypeId?: string;
+  }) {
+    return this.ridesService.getNearbyDrivers(
+      body.pickupLat,
+      body.pickupLng,
+      body.vehicleTypeId,
+    );
+  }
+
   @Post()
   async createRide(
     @CurrentUser('id') userId: string,

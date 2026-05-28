@@ -183,6 +183,51 @@ export class RidesService {
     return updatedRide;
   }
 
+  /// Lightweight nearby-drivers query for the consumer map. Returns
+  /// just lat/lng + heading so we can drop pins. No driver identity is
+  /// exposed.
+  async getNearbyDrivers(
+    pickupLat: number,
+    pickupLng: number,
+    vehicleTypeId?: string,
+  ) {
+    const RADIUS_KM = 5;
+    const drivers = vehicleTypeId
+        ? await this.matchingService.findNearbyDrivers(
+            pickupLat,
+            pickupLng,
+            RADIUS_KM,
+            vehicleTypeId,
+            0,
+          )
+        : await this.prisma.driver.findMany({
+            where: {
+              isOnline: true,
+              isOnTrip: false,
+              status: 'APPROVED',
+              currentLat: { not: null },
+              currentLng: { not: null },
+            },
+            select: {
+              id: true,
+              currentLat: true,
+              currentLng: true,
+              heading: true,
+            },
+            take: 30,
+          });
+    return {
+      drivers: drivers
+          .map((d: any) => ({
+            id: d.id,
+            lat: d.currentLat ? Number(d.currentLat) : null,
+            lng: d.currentLng ? Number(d.currentLng) : null,
+            heading: d.heading ? Number(d.heading) : 0,
+          }))
+          .filter((d: any) => d.lat != null && d.lng != null),
+    };
+  }
+
   private async logRideEvent(rideId: string, statusOrEvent: string, data?: any) {
     const eventMap: Record<string, string> = {
       PENDING: 'CREATED',

@@ -299,6 +299,40 @@ export class DriverService {
       addCharge = perMinute * (cappedSeconds / 60);
     }
 
+    // Don't keep accumulating fare past balance + 50 MRU debt. The
+    // movingKm and idleSeconds counters still advance (so we have the
+    // distance/time record) but the runningTotal stops climbing.
+    try {
+      const ride = await this.prisma.ride.findUnique({
+        where: { id: rideId },
+        select: {
+          driverId: true,
+          vehicleTypeId: true,
+        },
+      });
+      if (ride?.driverId && ride.vehicleTypeId) {
+        const driver = await this.prisma.driver.findUnique({
+          where: { id: ride.driverId },
+          include: { user: { include: { wallet: true } } },
+        });
+        const vt = await this.prisma.vehicleType.findUnique({
+          where: { id: ride.vehicleTypeId },
+          select: { adminCommission: true },
+        });
+        if (driver && vt) {
+          const adminPct = Number(vt.adminCommission);
+          const balance = driver.user.wallet
+            ? Number(driver.user.wallet.balance)
+            : 0;
+          const projectedTotal = Number(hourly.runningTotal) + addCharge;
+          const projectedCommission = projectedTotal * (adminPct / 100);
+          if (projectedCommission > balance + 50) {
+            addCharge = 0;
+          }
+        }
+      }
+    } catch {/* best effort */}
+
     await this.prisma.hourlyRide.update({
       where: { rideId },
       data: {
@@ -479,13 +513,17 @@ export class DriverService {
   async getHourlyMeter(userId: string, rideId: string) {
     const driver = await this.prisma.driver.findUnique({
       where: { userId },
-      select: { id: true },
+      include: { user: { include: { wallet: true } } },
     });
     if (!driver) throw new NotFoundException('Driver not found');
 
     const ride = await this.prisma.ride.findUnique({
       where: { id: rideId },
-      select: { driverId: true, hourlyRide: true },
+      select: {
+        driverId: true,
+        hourlyRide: true,
+        vehicleTypeId: true,
+      },
     });
     if (!ride || ride.driverId !== driver.id) {
       throw new NotFoundException('Ride not found');
@@ -494,12 +532,40 @@ export class DriverService {
     if (!h) {
       return { runningTotal: 0, idleSeconds: 0, movingKm: 0 };
     }
+
+    // Derive commission so far so the driver app can warn / force-end
+    // when the platform's cut exceeds the driver's wallet (with a small
+    // grace debt).
+    let adminCommissionPercent = 15;
+    if (ride.vehicleTypeId) {
+      const vt = await this.prisma.vehicleType.findUnique({
+        where: { id: ride.vehicleTypeId },
+        select: { adminCommission: true },
+      });
+      if (vt) adminCommissionPercent = Number(vt.adminCommission);
+    }
+    const runningTotal = Number(h.runningTotal);
+    const commissionSoFar = runningTotal * (adminCommissionPercent / 100);
+    const balance = driver.user.wallet
+      ? Number(driver.user.wallet.balance)
+      : 0;
+    const debtAllowance = 50;
+    const shouldEndRide = balance + debtAllowance - commissionSoFar < 0;
+    const lowBalance = balance - commissionSoFar < 0;
+
     return {
-      runningTotal: Number(h.runningTotal),
+      runningTotal,
       basePrice: Number(h.basePrice),
       idleSeconds: h.idleSeconds,
       movingKm: Number(h.movingKm),
       startedAt: h.startedAt,
+      // Commission + balance state for live UI
+      adminCommissionPercent,
+      commissionSoFar,
+      balance,
+      debtAllowance,
+      lowBalance,
+      shouldEndRide,
     };
   }
 
@@ -538,6 +604,7 @@ export class DriverService {
     const driver = await this.prisma.driver.findUnique({
       where: { userId },
       include: {
+        user: { include: { wallet: true } },
         vehicles: {
           where: { isActive: true, status: 'APPROVED' },
           take: 1,
@@ -547,6 +614,44 @@ export class DriverService {
 
     if (!driver) {
       throw new NotFoundException('Driver not found');
+    }
+
+    // Wallet must cover the platform commission for this ride before
+    // accepting. For city rides we use the estimatedFare; for open
+    // rides we use the basePrice as a floor (the meter takes over from
+    // there). No debt allowed at accept — the 50 MRU debt grace only
+    // applies once the trip is in progress.
+    const rideToCheck = await this.prisma.ride.findUnique({
+      where: { id: rideId },
+      select: {
+        rideType: true,
+        estimatedFare: true,
+        vehicleTypeId: true,
+        hourlyRide: { select: { basePrice: true } },
+      },
+    });
+    if (rideToCheck) {
+      let adminCommissionPercent = 15;
+      if (rideToCheck.vehicleTypeId) {
+        const vt = await this.prisma.vehicleType.findUnique({
+          where: { id: rideToCheck.vehicleTypeId },
+          select: { adminCommission: true },
+        });
+        if (vt) adminCommissionPercent = Number(vt.adminCommission);
+      }
+      const reference =
+        rideToCheck.rideType === 'HOURLY'
+          ? Number(rideToCheck.hourlyRide?.basePrice ?? 0)
+          : Number(rideToCheck.estimatedFare ?? 0);
+      const commissionDue = reference * (adminCommissionPercent / 100);
+      const balance = driver.user.wallet
+        ? Number(driver.user.wallet.balance)
+        : 0;
+      if (commissionDue > 0 && balance < commissionDue) {
+        throw new BadRequestException(
+          `رصيدك غير كافٍ — تحتاج ${commissionDue.toFixed(0)} MRU على الأقل لقبول هذه الرحلة (رصيدك: ${balance.toFixed(0)} MRU)`,
+        );
+      }
     }
 
     const vehicleId = driver.vehicles?.[0]?.id;

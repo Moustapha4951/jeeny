@@ -16,7 +16,6 @@ export class RidesController {
   ) {}
 
   @Post('estimate')
-  @Roles('CONSUMER', 'ADMIN')
   async estimateFare(@Body() body: {
     vehicleTypeId: string;
     pickupLat: number;
@@ -32,7 +31,6 @@ export class RidesController {
   }
 
   @Post()
-  @Roles('CONSUMER')
   async createRide(
     @CurrentUser('id') userId: string,
     @Body() dto: CreateRideDto,

@@ -12,8 +12,14 @@ export class RidesService {
   ) {}
 
   async createRideFromConsumer(userId: string, dto: any) {
-    const consumer = await this.prisma.consumer.findUnique({ where: { userId } });
-    if (!consumer) throw new NotFoundException('Consumer profile not found');
+    let consumer =
+        await this.prisma.consumer.findUnique({ where: { userId } });
+    // Backfill: any authenticated user can become a consumer on first
+    // ride. Driver/employee accounts that signed up before the consumer
+    // profile was added in verifyOtp would otherwise hit a 404 here.
+    consumer ??= await this.prisma.consumer.create({
+      data: { userId },
+    });
 
     return this.createRide({
       consumerId: consumer.id,

@@ -689,6 +689,11 @@ export class DriverService {
           where: { id: driver.id },
           select: { currentLat: true, currentLng: true },
         });
+        const existing = await this.prisma.hourlyRide.findUnique({
+          where: { rideId },
+          select: { basePrice: true },
+        });
+        const basePrice = existing?.basePrice ? Number(existing.basePrice) : 0;
         await this.prisma.hourlyRide.update({
           where: { rideId },
           data: {
@@ -696,7 +701,9 @@ export class DriverService {
             lastSampleAt: new Date(),
             lastLat: driverLoc?.currentLat ?? null,
             lastLng: driverLoc?.currentLng ?? null,
-            runningTotal: 0 as any,
+            // Reset live counters but keep the base price as the
+            // starting fare — it's owed the moment the trip begins.
+            runningTotal: basePrice as any,
             idleSeconds: 0,
             movingKm: 0 as any,
           },

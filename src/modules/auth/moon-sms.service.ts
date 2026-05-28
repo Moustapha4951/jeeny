@@ -42,9 +42,13 @@ export class MoonSmsService {
 
   async sendSMS(phoneNumber: string, message: string): Promise<MoonSendResponse> {
     const phone = this.normalizePhone(phoneNumber);
-    const body = this.testing
-      ? `Message de test - ${message}`
-      : message;
+    // Moon requires every SMS to clearly identify itself as part of
+    // the internal-testing window until they certify the account for
+    // production traffic. Once that happens, set MOON_SMS_TESTING=false
+    // in the environment and the prefix drops automatically.
+    const testingPrefix =
+      '[TEST INTERNE - Masar / مسار - رسالة اختبار داخلية]';
+    const body = this.testing ? `${testingPrefix}\n${message}` : message;
     try {
       this.logger.log(`Sending SMS via Moon to ${phone}`);
       const response = await firstValueFrom(

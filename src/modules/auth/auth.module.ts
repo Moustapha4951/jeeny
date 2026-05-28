@@ -6,7 +6,7 @@ import { HttpModule } from '@nestjs/axios';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { AuthController } from './auth.controller';
 import { OtpService } from './otp.service';
-import { MoorsylService } from './moorsyl.service';
+import { MoonSmsService } from './moon-sms.service';
 import { JwtAuthService } from './jwt.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -31,7 +31,7 @@ import { RolesGuard } from './guards/roles.guard';
     }),
   ],
   controllers: [AuthController],
-  providers: [OtpService, MoorsylService, JwtAuthService, JwtStrategy, JwtAuthGuard, RolesGuard],
+  providers: [OtpService, MoonSmsService, JwtAuthService, JwtStrategy, JwtAuthGuard, RolesGuard],
   exports: [OtpService, JwtAuthService, JwtAuthGuard, RolesGuard, PassportModule],
 })
 export class AuthModule {}

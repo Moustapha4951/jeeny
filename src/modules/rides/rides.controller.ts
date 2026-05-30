@@ -1,6 +1,7 @@
-import { Controller, Get, Post, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { RidesService } from './rides.service';
 import { FareService } from './fare.service';
+import { RatingsService } from './ratings.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -13,6 +14,7 @@ export class RidesController {
   constructor(
     private ridesService: RidesService,
     private fareService: FareService,
+    private ratingsService: RatingsService,
   ) {}
 
   @Post('estimate')
@@ -71,5 +73,24 @@ export class RidesController {
     @Body() body: { reason: string },
   ) {
     return this.ridesService.cancelRide(rideId, userId, body.reason || 'User cancelled');
+  }
+
+  @Get(':id/ratings/mine')
+  async getMyRideRating(
+    @Param('id') rideId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.ratingsService.getMyRating(rideId, userId);
+  }
+
+  @Post(':id/ratings')
+  async rateRide(
+    @Param('id') rideId: string,
+    @CurrentUser('id') userId: string,
+    @CurrentUser('role') role: string,
+    @Body() body: { score: number; comment?: string; tags?: string[] },
+  ) {
+    const fromRole: 'CONSUMER' | 'DRIVER' = role === 'DRIVER' ? 'DRIVER' : 'CONSUMER';
+    return this.ratingsService.rateRide(rideId, userId, fromRole, body);
   }
 }

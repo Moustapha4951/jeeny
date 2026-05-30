@@ -107,11 +107,26 @@ export class RidesService {
     const where = role === 'DRIVER'
       ? { driver: { userId } }
       : { consumer: { userId } };
-    return this.prisma.ride.findMany({
+    const rides = await this.prisma.ride.findMany({
       where,
-      include: { consumer: { include: { user: true } }, driver: { include: { user: true } }, vehicleType: true },
+      include: {
+        consumer: { include: { user: true } },
+        driver: { include: { user: true } },
+        vehicleType: true,
+        ratings: {
+          where: { fromUserId: userId },
+          select: { id: true, score: true, tags: true, comment: true },
+          take: 1,
+        },
+      },
       orderBy: { createdAt: 'desc' },
     });
+    // Flatten the per-ride 'myRating' so the consumer app can render
+    // a "rate this ride" CTA without an extra round trip.
+    return rides.map((r: any) => ({
+      ...r,
+      myRating: r.ratings?.[0] ?? null,
+    }));
   }
 
   async acceptRide(rideId: string, driverId: string) {

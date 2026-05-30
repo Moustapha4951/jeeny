@@ -43,9 +43,19 @@ export class MatchingService {
     options?: MatchingOptions,
   ): Promise<void> {
     this.logger.log(`🔍 Finding drivers for ride ${rideId} at (${pickupLat}, ${pickupLng})`);
+
+    // Sweep for stale rides (older than 4h still IN_PROGRESS / DRIVER_*)
+    // and free their drivers. This guards against the case where a
+    // driver app crashes or loses connection mid-ride and never sends
+    // the completeRide call. Without this, the driver stays
+    // `isOnTrip=true` forever and never matches.
+    await this.sweepStaleRides();
     
-    // Load driver preferences from system settings if not provided
-    const minRating = Number(await this.getSystemSetting('min_driver_rating', 4.0));
+    // Load driver preferences from system settings if not provided.
+    // Default 0 — letting brand-new accounts (rating starts at 5.0) match
+    // even before any rating history exists. Admin can raise the floor
+    // later via system_settings.
+    const minRating = Number(await this.getSystemSetting('min_driver_rating', 0));
     const strategy = options?.strategy || await this.getSystemSetting('matching_strategy', 'NEAREST');
     const maxDrivers = Number(await this.getSystemSetting('matching_max_drivers', 5));
     let maxRadius = options?.maxRadiusKm || Number(await this.getSystemSetting('matching_radius_km', 10));
@@ -185,7 +195,7 @@ export class MatchingService {
     });
     
     for (const driver of allDrivers) {
-      this.logger.log(`   Driver ${driver.userId}: online=${driver.isOnline}, status=${driver.status}, vehicles=${driver.vehicles.length}`);
+      this.logger.log(`   Driver ${driver.userId}: online=${driver.isOnline}, status=${driver.status}, isOnTrip=${driver.isOnTrip}, rating=${driver.rating}, vehicles=${driver.vehicles.length}`);
       if (driver.vehicles.length > 0) {
         driver.vehicles.forEach(v => {
           this.logger.log(`      Vehicle: typeId=${v.typeId}, status=${v.status}, isActive=${v.isActive}, requested=${vehicleTypeId}`);
@@ -358,5 +368,50 @@ export class MatchingService {
 
   private toRad(degrees: number): number {
     return degrees * (Math.PI / 180);
+  }
+
+  /// Mark stuck rides (IN_PROGRESS / DRIVER_* older than 4h) as
+  /// CANCELLED_BY_DRIVER and free their drivers. Best-effort.
+  private async sweepStaleRides(): Promise<void> {
+    try {
+      const cutoff = new Date(Date.now() - 4 * 60 * 60 * 1000); // 4h ago
+      const stale = await this.prisma.ride.findMany({
+        where: {
+          status: { in: ['DRIVER_ASSIGNED', 'DRIVER_ARRIVED', 'IN_PROGRESS'] },
+          createdAt: { lt: cutoff },
+        },
+        select: { id: true, driverId: true, status: true, createdAt: true },
+      });
+      if (stale.length === 0) return;
+      this.logger.warn(
+        `🧹 Sweeping ${stale.length} stale ride(s) older than 4h`,
+      );
+      for (const r of stale) {
+        await this.prisma.ride
+          .update({
+            where: { id: r.id },
+            data: {
+              status: 'CANCELLED_BY_DRIVER',
+              cancelledAt: new Date(),
+              cancelledBy: 'DRIVER',
+              cancelReason: 'Auto-cancelled by stale ride sweeper',
+            },
+          })
+          .catch(() => {});
+        if (r.driverId) {
+          await this.prisma.driver
+            .update({
+              where: { id: r.driverId },
+              data: { isOnTrip: false },
+            })
+            .catch(() => {});
+        }
+        this.logger.warn(
+          `   • ride ${r.id} (${r.status}, ${r.createdAt.toISOString()}) → CANCELLED_BY_DRIVER`,
+        );
+      }
+    } catch (e) {
+      this.logger.error('Stale ride sweep failed:', e);
+    }
   }
 }

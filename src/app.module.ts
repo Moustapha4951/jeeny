@@ -14,6 +14,7 @@ import { RidesModule } from './modules/rides/rides.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { DriverModule } from './modules/driver/driver.module';
 import { ChatModule } from './modules/chat/chat.module';
+import { CallsModule } from './modules/calls/calls.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { validate } from './config/env.validation';
@@ -36,6 +37,7 @@ import { validate } from './config/env.validation';
     AdminModule,
     DriverModule,
     ChatModule,
+    CallsModule,
   ],
   controllers: [AppController],
   providers: [

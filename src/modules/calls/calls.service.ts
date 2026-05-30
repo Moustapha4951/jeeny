@@ -127,6 +127,9 @@ export class CallsService {
     });
 
     // Push to the recipient.
+    const fullName = (first?: string | null, last?: string | null) =>
+      `${first ?? ''} ${last ?? ''}`.trim();
+
     const incomingPayload = {
       callId: call.id,
       rideId,
@@ -135,8 +138,12 @@ export class CallsService {
       uid: recipientUid,
       callerName:
         callerType === 'DRIVER'
-          ? `${driverUser.firstName ?? ''} ${driverUser.lastName ?? ''}`.trim()
-          : `${consumerUser.firstName ?? ''} ${consumerUser.lastName ?? ''}`.trim(),
+          ? fullName(driverUser.firstName, driverUser.lastName)
+          : fullName(consumerUser.firstName, consumerUser.lastName),
+      callerAvatar:
+        callerType === 'DRIVER'
+          ? (driverUser.avatar ?? null)
+          : (consumerUser.avatar ?? null),
       callerType,
       callType,
       appId: this.appId,
@@ -176,6 +183,16 @@ export class CallsService {
       token: callerToken,
       uid: callerUid,
       appId: this.appId,
+      // The caller's UI shows the recipient — surface their name and
+      // avatar so we don't have to round-trip another endpoint.
+      peerName:
+        callerType === 'DRIVER'
+          ? fullName(consumerUser.firstName, consumerUser.lastName)
+          : fullName(driverUser.firstName, driverUser.lastName),
+      peerAvatar:
+        callerType === 'DRIVER'
+          ? (consumerUser.avatar ?? null)
+          : (driverUser.avatar ?? null),
     };
   }
 

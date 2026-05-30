@@ -5,6 +5,7 @@ import { UploadDocumentDto, DocumentType } from './dto/upload-document.dto';
 import { LocationService } from './location.service';
 import { AssignmentsService } from './assignments.service';
 import { FirebaseService } from '../../firebase/firebase.service';
+import { ConsumerGateway } from '../consumer-gateway/consumer.gateway';
 
 @Injectable()
 export class DriverService {
@@ -15,6 +16,7 @@ export class DriverService {
     @Inject(forwardRef(() => AssignmentsService))
     private assignmentsService: AssignmentsService,
     private firebaseService: FirebaseService,
+    private consumerGateway: ConsumerGateway,
   ) {}
 
   async getProfile(userId: string) {
@@ -221,6 +223,32 @@ export class DriverService {
       }
     } catch (e) {
       console.error('Hourly meter accumulate failed:', e);
+    }
+
+    // Broadcast the location to any rider waiting on this driver. We
+    // only push when the driver is on an active (non-terminal) ride to
+    // avoid spamming sockets while the driver is just cruising.
+    try {
+      const liveRide = await this.prisma.ride.findFirst({
+        where: {
+          driverId: driver.id,
+          status: {
+            in: ['DRIVER_ASSIGNED', 'DRIVER_ARRIVED', 'IN_PROGRESS'],
+          },
+        },
+        select: { id: true },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (liveRide) {
+        this.consumerGateway.emitDriverLocation(liveRide.id, {
+          lat: latitude,
+          lng: longitude,
+          heading: driver.heading != null ? Number(driver.heading) : null,
+        });
+      }
+    } catch (e) {
+      // Non-fatal — location persisted, just no live push.
+      console.error('Consumer location broadcast failed:', e);
     }
 
     return { success: true };
@@ -615,7 +643,6 @@ export class DriverService {
     if (!driver) {
       throw new NotFoundException('Driver not found');
     }
-
     // Wallet must cover the platform commission for this ride before
     // accepting. For city rides we use the estimatedFare; for open
     // rides we use the basePrice as a floor (the meter takes over from
@@ -683,6 +710,7 @@ export class DriverService {
       data: { status: 'REJECTED' },
     });
 
+    await this.broadcastRideUpdate(rideId);
     return { success: true, ride };
   }
 
@@ -753,6 +781,7 @@ export class DriverService {
 
     console.log(`✅ Driver ${driver.id} arrived at pickup for ride ${rideId}`);
 
+    await this.broadcastRideUpdate(rideId);
     return { success: true, ride };
   }
 
@@ -825,6 +854,7 @@ export class DriverService {
 
     console.log(`🚗 Ride ${rideId} started by driver ${driver.id}`);
 
+    await this.broadcastRideUpdate(rideId);
     return { success: true, ride };
   }
 
@@ -1055,6 +1085,7 @@ export class DriverService {
       console.error('Auto-offline check failed:', e);
     }
 
+    await this.broadcastRideUpdate(rideId);
     return {
       success: true,
       ride: updatedRide,
@@ -1062,6 +1093,25 @@ export class DriverService {
       autoOfflined,
       minimumBalance,
     };
+  }
+
+  /// Push the latest ride payload to the rider over their WS connection.
+  /// Best-effort — failure here must not break the HTTP response.
+  private async broadcastRideUpdate(rideId: string) {
+    try {
+      const ride = await this.prisma.ride.findUnique({
+        where: { id: rideId },
+        include: {
+          consumer: { include: { user: true } },
+          driver: { include: { user: true } },
+          vehicle: true,
+          vehicleType: true,
+        },
+      });
+      if (ride) this.consumerGateway.emitRideUpdate(rideId, ride);
+    } catch (e) {
+      console.error('Failed to broadcast ride update:', e);
+    }
   }
 
   async cancelRideByDriver(userId: string, rideId: string, reason: string) {
@@ -1096,6 +1146,7 @@ export class DriverService {
 
     console.log(`❌ Ride ${rideId} cancelled by driver ${driver.id}: ${reason}`);
 
+    await this.broadcastRideUpdate(rideId);
     return { success: true, ride };
   }
 

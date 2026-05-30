@@ -5,11 +5,13 @@ import { DriverService } from './driver.service';
 import { DriverGateway } from './driver.gateway';
 import { LocationService } from './location.service';
 import { AssignmentsService } from './assignments.service';
+import { ConsumerGatewayModule } from '../consumer-gateway/consumer-gateway.module';
 import { PrismaModule } from '../../prisma/prisma.module';
 
 @Module({
   imports: [
     PrismaModule,
+    ConsumerGatewayModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET || 'your-secret-key',
       signOptions: { expiresIn: process.env.JWT_EXPIRY || '30d' },

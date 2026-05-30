@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { PrismaService } from '../../prisma/prisma.service';
 import { FareService } from './fare.service';
 import { MatchingService } from './matching.service';
+import { ConsumerGateway } from '../consumer-gateway/consumer.gateway';
 
 @Injectable()
 export class RidesService {
@@ -9,6 +10,7 @@ export class RidesService {
     private prisma: PrismaService,
     private fareService: FareService,
     private matchingService: MatchingService,
+    private consumerGateway: ConsumerGateway,
   ) {}
 
   async createRideFromConsumer(userId: string, dto: any) {
@@ -195,7 +197,27 @@ export class RidesService {
     }
 
     await this.logRideEvent(rideId, updatedRide.status, { userId, reason });
+    await this.broadcastRideUpdate(rideId);
     return updatedRide;
+  }
+
+  /// Push the latest ride payload to the rider over WS so they see the
+  /// status flip without waiting for the next poll.
+  private async broadcastRideUpdate(rideId: string) {
+    try {
+      const ride = await this.prisma.ride.findUnique({
+        where: { id: rideId },
+        include: {
+          consumer: { include: { user: true } },
+          driver: { include: { user: true } },
+          vehicle: true,
+          vehicleType: true,
+        },
+      });
+      if (ride) this.consumerGateway.emitRideUpdate(rideId, ride);
+    } catch (e) {
+      console.error('Failed to broadcast ride update:', e);
+    }
   }
 
   /// Lightweight nearby-drivers query for the consumer map. Returns

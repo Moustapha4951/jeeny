@@ -3,6 +3,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { FareService } from './fare.service';
 import { MatchingService } from './matching.service';
 import { ConsumerGateway } from '../consumer-gateway/consumer.gateway';
+import { DriverGateway } from '../driver/driver.gateway';
 
 @Injectable()
 export class RidesService {
@@ -11,6 +12,7 @@ export class RidesService {
     private fareService: FareService,
     private matchingService: MatchingService,
     private consumerGateway: ConsumerGateway,
+    private driverGateway: DriverGateway,
   ) {}
 
   async createRideFromConsumer(userId: string, dto: any) {
@@ -214,7 +216,14 @@ export class RidesService {
           vehicleType: true,
         },
       });
-      if (ride) this.consumerGateway.emitRideUpdate(rideId, ride);
+      if (!ride) return;
+      // Push to the rider over the consumer gateway.
+      this.consumerGateway.emitRideUpdate(rideId, ride);
+      // Push to the driver over the driver gateway, so a rider-side
+      // cancel reaches the driver app instantly.
+      if (ride.driverId) {
+        await this.driverGateway.sendRideUpdate(ride.driverId, ride);
+      }
     } catch (e) {
       console.error('Failed to broadcast ride update:', e);
     }

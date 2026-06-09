@@ -1718,7 +1718,8 @@ export class AdminService {
     if (document.user.fcmToken) {
       const docTypeArabic = {
         'LICENSE': 'رخصة القيادة',
-        'NATIONAL_ID': 'البطاقة الوطنية',
+        'NATIONAL_ID': 'البطاقة الوطنية - الوجه الأمامي',
+        'NATIONAL_ID_BACK': 'البطاقة الوطنية - الوجه الخلفي',
         'VEHICLE_REG': 'استمارة المركبة',
         'INSURANCE': 'تأمين المركبة',
         'PROFILE_PHOTO': 'الصورة الشخصية',
@@ -1739,13 +1740,13 @@ export class AdminService {
       where: { userId: document.userId },
     });
 
-    const requiredTypes = ['LICENSE', 'NATIONAL_ID', 'VEHICLE_REG', 'INSURANCE'];
+    const requiredTypes = ['LICENSE', 'NATIONAL_ID', 'NATIONAL_ID_BACK', 'VEHICLE_REG', 'INSURANCE'];
     const approvedRequired = allDocs.filter(
       doc => requiredTypes.includes(doc.type) && doc.status === 'APPROVED'
     );
 
-    // If all 4 required documents are approved, approve the driver
-    if (approvedRequired.length === 4) {
+    // If all 5 required documents are approved, approve the driver
+    if (approvedRequired.length === 5) {
       await this.prisma.driver.update({
         where: { userId: document.userId },
         data: { status: 'APPROVED' },
@@ -1783,7 +1784,8 @@ export class AdminService {
     if (document.user.fcmToken) {
       const docTypeArabic = {
         'LICENSE': 'رخصة القيادة',
-        'NATIONAL_ID': 'البطاقة الوطنية',
+        'NATIONAL_ID': 'البطاقة الوطنية - الوجه الأمامي',
+        'NATIONAL_ID_BACK': 'البطاقة الوطنية - الوجه الخلفي',
         'VEHICLE_REG': 'استمارة المركبة',
         'INSURANCE': 'تأمين المركبة',
         'PROFILE_PHOTO': 'الصورة الشخصية',
@@ -1800,7 +1802,7 @@ export class AdminService {
     }
 
     // If any required document is rejected, set driver status to PENDING
-    const requiredTypes = ['LICENSE', 'NATIONAL_ID', 'VEHICLE_REG', 'INSURANCE'];
+    const requiredTypes = ['LICENSE', 'NATIONAL_ID', 'NATIONAL_ID_BACK', 'VEHICLE_REG', 'INSURANCE'];
     if (requiredTypes.includes(document.type)) {
       await this.prisma.driver.update({
         where: { userId: document.userId },

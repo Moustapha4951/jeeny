@@ -431,13 +431,13 @@ export class DriverService {
         where: {
           userId,
           type: {
-            in: ['LICENSE', 'NATIONAL_ID', 'VEHICLE_REG', 'INSURANCE'],
+            in: ['LICENSE', 'NATIONAL_ID', 'NATIONAL_ID_BACK', 'VEHICLE_REG', 'INSURANCE'],
           },
         },
       });
 
       const approvedDocs = requiredDocs.filter(doc => doc.status === 'APPROVED');
-      if (approvedDocs.length < 4) {
+      if (approvedDocs.length < 5) {
         throw new BadRequestException(
           'Please complete and get approval for all required documents',
         );
@@ -1229,6 +1229,7 @@ export class DriverService {
     const typeMap: Record<string, string> = {
       [DocumentType.LICENSE]: 'LICENSE',
       [DocumentType.NATIONAL_ID]: 'NATIONAL_ID',
+      [DocumentType.NATIONAL_ID_BACK]: 'NATIONAL_ID_BACK',
       [DocumentType.PROFILE_PHOTO]: 'PROFILE_PHOTO',
       [DocumentType.VEHICLE_REG]: 'VEHICLE_REG',
       [DocumentType.INSURANCE]: 'INSURANCE',
@@ -1242,6 +1243,7 @@ export class DriverService {
     const requiresExpiry = [
       'LICENSE',
       'NATIONAL_ID',
+      'NATIONAL_ID_BACK',
       'VEHICLE_REG',
       'INSURANCE',
     ].includes(prismaDocType);
@@ -1325,6 +1327,7 @@ export class DriverService {
     const driverFieldMap: Record<string, string> = {
       [DocumentType.LICENSE]: 'licenseImage',
       [DocumentType.NATIONAL_ID]: 'nationalIdImage',
+      [DocumentType.NATIONAL_ID_BACK]: 'nationalIdBackImage',
       [DocumentType.PROFILE_PHOTO]: 'profilePhoto',
     };
 

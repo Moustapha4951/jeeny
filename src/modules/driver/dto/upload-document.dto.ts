@@ -3,6 +3,7 @@ import { IsString, IsEnum, IsNotEmpty, IsOptional, IsDateString } from 'class-va
 export enum DocumentType {
   LICENSE = 'license',
   NATIONAL_ID = 'national_id',
+  NATIONAL_ID_BACK = 'national_id_back',
   PROFILE_PHOTO = 'profile_photo',
   VEHICLE_REG = 'vehicle_reg',
   INSURANCE = 'insurance',

@@ -427,6 +427,7 @@ enum RideLogEvent {
 enum DocumentType {
   LICENSE
   NATIONAL_ID
+  NATIONAL_ID_BACK
   VEHICLE_REG
   INSURANCE
   PROFILE_PHOTO
@@ -698,6 +699,7 @@ model Driver {
   // Documents
   licenseImage    String?
   nationalIdImage String?
+  nationalIdBackImage String?
   profilePhoto    String?
 
   // Approval

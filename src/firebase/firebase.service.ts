@@ -12,7 +12,11 @@ export class FirebaseService implements OnModuleInit {
   onModuleInit() {
     const projectId = this.configService.get<string>('FIREBASE_PROJECT_ID');
     const clientEmail = this.configService.get<string>('FIREBASE_CLIENT_EMAIL');
-    const privateKey = this.configService.get<string>('FIREBASE_PRIVATE_KEY')?.replace(/\\n/g, '\n');
+    let privateKey = this.configService.get<string>('FIREBASE_PRIVATE_KEY') || '';
+    // Strip wrapping quotes if present (some hosting UIs add them)
+    privateKey = privateKey.replace(/^["']|["']$/g, '');
+    // Convert literal \n sequences to real newlines
+    privateKey = privateKey.replace(/\\n/g, '\n');
 
     if (!projectId || !clientEmail || !privateKey) {
       this.logger.error('Firebase credentials are missing in environment variables');

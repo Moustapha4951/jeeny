@@ -7,9 +7,11 @@ import {
   ConnectedSocket,
   MessageBody,
 } from '@nestjs/websockets';
+import { Inject, forwardRef } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../../prisma/prisma.service';
+import { SupportService } from '../support/support.service';
 
 @WebSocketGateway({
   cors: {
@@ -27,6 +29,8 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
   constructor(
     private jwtService: JwtService,
     private prisma: PrismaService,
+    @Inject(forwardRef(() => SupportService))
+    private supportService: SupportService,
   ) {}
 
   async handleConnection(client: Socket) {
@@ -103,6 +107,35 @@ export class DriverGateway implements OnGatewayConnection, OnGatewayDisconnect {
     } catch (error) {
       console.error('Location update error:', error);
     }
+  }
+
+  // ─── Support chat ─────────────────────────────────────────────────────────
+
+  @SubscribeMessage('support:send')
+  async handleSupportSend(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { content: string },
+  ) {
+    const driverUserId = client.data.userId;
+    if (!driverUserId || !data.content?.trim()) return;
+    await this.supportService.handleDriverMessage(driverUserId, data.content.trim());
+  }
+
+  @SubscribeMessage('support:get_history')
+  async handleSupportHistory(@ConnectedSocket() client: Socket) {
+    const driverUserId = client.data.userId;
+    if (!driverUserId) return;
+
+    const conv = await this.supportService.getOrCreateSupportConversation(driverUserId);
+    const messages = await this.supportService.getMessages(conv.id);
+
+    client.emit('support:history', {
+      conversationId: conv.id,
+      messages: messages.map((m: any) => ({
+        ...m,
+        createdAt: m.createdAt instanceof Date ? m.createdAt.toISOString() : m.createdAt,
+      })),
+    });
   }
 
   // Send driver profile update to specific driver

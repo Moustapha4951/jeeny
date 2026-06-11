@@ -16,6 +16,7 @@ import { DriverModule } from './modules/driver/driver.module';
 import { ChatModule } from './modules/chat/chat.module';
 import { CallsModule } from './modules/calls/calls.module';
 import { SosModule } from './modules/sos/sos.module';
+import { SupportModule } from './modules/support/support.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { validate } from './config/env.validation';
@@ -40,6 +41,7 @@ import { validate } from './config/env.validation';
     ChatModule,
     CallsModule,
     SosModule,
+    SupportModule,
   ],
   controllers: [AppController],
   providers: [

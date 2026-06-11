@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { DriverController } from './driver.controller';
 import { DriverService } from './driver.service';
@@ -7,6 +7,7 @@ import { LocationService } from './location.service';
 import { AssignmentsService } from './assignments.service';
 import { ConsumerGatewayModule } from '../consumer-gateway/consumer-gateway.module';
 import { PrismaModule } from '../../prisma/prisma.module';
+import { SupportModule } from '../support/support.module';
 
 @Module({
   imports: [
@@ -16,9 +17,11 @@ import { PrismaModule } from '../../prisma/prisma.module';
       secret: process.env.JWT_SECRET || 'your-secret-key',
       signOptions: { expiresIn: process.env.JWT_EXPIRY || '30d' },
     }),
+    forwardRef(() => SupportModule),
   ],
   controllers: [DriverController],
   providers: [DriverService, DriverGateway, LocationService, AssignmentsService],
   exports: [DriverService, DriverGateway, LocationService, AssignmentsService],
 })
 export class DriverModule {}
+

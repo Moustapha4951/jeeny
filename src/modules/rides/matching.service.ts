@@ -62,7 +62,12 @@ export class MatchingService {
     let expansionRadius = options?.expansionKm || 2;
     if (maxRadius < 1) maxRadius = 10;
 
-    let radius = (strategy === 'ALL_IN_RANGE' || strategy === 'CUSTOM') 
+    // Check if this ride has been dispatched before (resend/retry attempt)
+    const hasPreviousOffers = await this.prisma.rideOffer.count({
+      where: { rideId },
+    }) > 0;
+
+    let radius = (strategy === 'ALL_IN_RANGE' || strategy === 'CUSTOM' || hasPreviousOffers) 
       ? maxRadius 
       : Math.min(expansionRadius, maxRadius); // Start with expansion radius or max
 

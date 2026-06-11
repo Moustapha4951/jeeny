@@ -2301,3 +2301,27 @@ model AccountDeletionRequest {
   @@index([phoneNumber])
   @@index([status])
 }
+
+// ----- Recharge Requests -----
+
+enum RechargeRequestStatus {
+  PENDING
+  APPROVED
+  DENIED
+}
+
+model RechargeRequest {
+  id            String                @id @default(uuid())
+  driverUserId  String
+  amount        Decimal               @db.Decimal(12, 2)
+  screenshotUrl String?
+  status        RechargeRequestStatus @default(PENDING)
+  reviewNote    String?
+  reviewedById  String?
+  reviewedAt    DateTime?
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+
+  @@index([driverUserId])
+  @@index([status])
+}

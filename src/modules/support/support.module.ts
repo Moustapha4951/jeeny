@@ -5,6 +5,7 @@ import { PrismaModule } from '../../prisma/prisma.module';
 import { WalletModule } from '../wallet/wallet.module';
 import { DriverModule } from '../driver/driver.module';
 import { SupportService } from './support.service';
+import { SupportController } from './support.controller';
 import { EmployerGateway } from './employer.gateway';
 
 @Module({
@@ -21,6 +22,7 @@ import { EmployerGateway } from './employer.gateway';
     }),
     forwardRef(() => DriverModule),
   ],
+  controllers: [SupportController],
   providers: [SupportService, EmployerGateway],
   exports: [SupportService, EmployerGateway],
 })

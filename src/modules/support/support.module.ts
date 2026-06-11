@@ -10,7 +10,7 @@ import { EmployerGateway } from './employer.gateway';
 @Module({
   imports: [
     PrismaModule,
-    WalletModule,
+    forwardRef(() => WalletModule),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({
@@ -25,3 +25,4 @@ import { EmployerGateway } from './employer.gateway';
   exports: [SupportService, EmployerGateway],
 })
 export class SupportModule {}
+

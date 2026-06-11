@@ -8,6 +8,7 @@ import { EmployerGateway } from './employer.gateway';
 export class SupportService {
   constructor(
     private prisma: PrismaService,
+    @Inject(forwardRef(() => WalletService))
     private walletService: WalletService,
     @Inject(forwardRef(() => DriverGateway))
     private driverGateway: DriverGateway,

@@ -1,6 +1,6 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { MoonSmsService } from './moon-sms.service';
+import { MoorsylSmsService } from './moorsyl-sms.service';
 
 @Injectable()
 export class OtpService {
@@ -11,7 +11,7 @@ export class OtpService {
 
   constructor(
     private prisma: PrismaService,
-    private sms: MoonSmsService,
+    private sms: MoorsylSmsService,
   ) {}
 
   generateOTP(): string {
@@ -59,12 +59,12 @@ export class OtpService {
     // Send OTP via Moon SMS (Mauritanian provider, all carriers).
     try {
       const messageId = await this.sms.sendOTP(phoneNumber, otp);
-      this.logger.log(`OTP sent via Moon. Message ID: ${messageId}`);
+      this.logger.log(`OTP sent via Moorsyl. Message ID: ${messageId?.id || 'OK'}`);
 
       // DEV MODE: Also log to console
       this.logger.warn(`🔐 OTP for ${phoneNumber}: ${otp} (expires in ${this.OTP_EXPIRY_MINUTES} minutes)`);
     } catch (error) {
-      this.logger.error('Failed to send OTP via Moon:', error);
+      this.logger.error('Failed to send OTP via Moorsyl:', error);
       throw new BadRequestException('Failed to send OTP. Please try again.');
     }
   }

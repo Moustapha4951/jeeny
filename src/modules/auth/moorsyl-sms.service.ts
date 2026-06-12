@@ -6,9 +6,7 @@ import { firstValueFrom } from 'rxjs';
 export class MoorsylSmsService {
   private readonly logger = new Logger(MoorsylSmsService.name);
   private readonly baseUrl = 'https://api.moorsyl.com/api/sms';
-  private readonly apiKey =
-    process.env.MOORSYL_API_KEY ||
-    'sk_rhwlGMZsSQSTaeoUQpOcElLcSLwJxVvFmLrANOtEpAjhcuaSfNeEneKkCtxJUWGX';
+  private readonly apiKey = process.env.MOORSYL_API_KEY || '';
 
   constructor(private readonly httpService: HttpService) {}
 
@@ -55,13 +53,14 @@ export class MoorsylSmsService {
       );
       return response.data;
     } catch (error: any) {
-      this.logger.error(
-        'Failed to send SMS via Moorsyl:',
-        error.response?.data || error.message,
-      );
+      const errorData = error.response?.data;
+      const errorMsg = errorData ? JSON.stringify(errorData) : error.message;
+      
+      this.logger.error(`Failed to send SMS via Moorsyl: ${errorMsg}`);
+      
       throw new Error(
         `Failed to send SMS: ${
-          error.response?.data?.message || error.message
+          errorData?.message || error.message
         }`,
       );
     }

@@ -1,4 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, forwardRef, Inject } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import axios from 'axios';
 import { PrismaService } from '../../prisma/prisma.service';
 import { DriverGateway } from './driver.gateway';
 import { UploadDocumentDto, DocumentType } from './dto/upload-document.dto';
@@ -17,6 +19,7 @@ export class DriverService {
     private assignmentsService: AssignmentsService,
     private firebaseService: FirebaseService,
     private consumerGateway: ConsumerGateway,
+    private configService: ConfigService,
   ) {}
 
   async getProfile(userId: string) {
@@ -259,6 +262,29 @@ export class DriverService {
   ///   • If average speed ≥ movingThreshold → bill the segment as distance.
   ///   • Otherwise → bill the time delta as idle minutes.
   /// Updates the HourlyRide row's running counters and total fare.
+  private async snapCoordinateToRoad(
+    lat: number,
+    lng: number,
+  ): Promise<{ latitude: number; longitude: number } | null> {
+    const apiKey = this.configService.get<string>('GOOGLE_MAPS_API_KEY');
+    if (!apiKey) return null;
+    try {
+      const url = `https://roads.googleapis.com/v1/snapToRoads?path=${lat},${lng}&key=${apiKey}`;
+      const response = await axios.get(url);
+      const snappedPoints = response.data?.snappedPoints;
+      if (snappedPoints && snappedPoints.length > 0) {
+        const location = snappedPoints[0].location;
+        return {
+          latitude: location.latitude,
+          longitude: location.longitude,
+        };
+      }
+    } catch (error) {
+      console.error('Error snapping coordinate to road on backend:', error);
+    }
+    return null;
+  }
+
   private async accumulateHourlyMeter(
     rideId: string,
     lat: number,
@@ -293,12 +319,29 @@ export class DriverService {
 
     let segmentKm = 0;
     if (hourly.lastLat != null && hourly.lastLng != null) {
-      segmentKm = haversineKm(
+      // Try snapping both coordinates to the road
+      const snappedCurrent = await this.snapCoordinateToRoad(lat, lng);
+      const snappedLast = await this.snapCoordinateToRoad(
         Number(hourly.lastLat),
         Number(hourly.lastLng),
-        lat,
-        lng,
       );
+
+      if (snappedCurrent && snappedLast) {
+        segmentKm = haversineKm(
+          snappedLast.latitude,
+          snappedLast.longitude,
+          snappedCurrent.latitude,
+          snappedCurrent.longitude,
+        );
+      } else {
+        // Fallback to raw haversine
+        segmentKm = haversineKm(
+          Number(hourly.lastLat),
+          Number(hourly.lastLng),
+          lat,
+          lng,
+        );
+      }
     }
     const speedKmh = cappedSeconds > 0
       ? (segmentKm / (cappedSeconds / 3600))
@@ -308,7 +351,7 @@ export class DriverService {
     // fix (urban canyon, indoors, cold start). Bill the segment as
     // idle time but don't credit the phantom kilometers.
     const jumpDetected = speedKmh > 120;
-    const threshold = Number(hourly.movingThresholdKmh) || 5;
+    const threshold = 0.5; // Use 0.5 km/h moving threshold to capture slow movements
 
     let addIdleSeconds = 0;
     let addMovingKm = 0;

@@ -8,6 +8,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { DriverGateway } from '../driver/driver.gateway';
 import { EmployerGateway } from '../support/employer.gateway';
+import { FirebaseService } from '../../firebase/firebase.service';
 
 @Injectable()
 export class WalletService {
@@ -17,6 +18,7 @@ export class WalletService {
     private driverGateway: DriverGateway,
     @Inject(forwardRef(() => EmployerGateway))
     private employerGateway: EmployerGateway,
+    private firebaseService: FirebaseService,
   ) {}
 
   async getWallet(userId: string) {
@@ -346,6 +348,28 @@ export class WalletService {
       } catch (_) {}
     }
 
+    // Send FCM notification
+    const user = await this.prisma.user.findUnique({
+      where: { id: request.driverUserId },
+      select: { fcmToken: true },
+    });
+    if (user?.fcmToken) {
+      try {
+        await this.firebaseService.sendNotification(
+          user.fcmToken,
+          'تم قبول طلب شحن الرصيد',
+          `تم قبول طلب شحن رصيدك بمبلغ ${Number(request.amount)} أوقية.`,
+          {
+            type: 'RECHARGE_APPROVED',
+            amount: request.amount.toString(),
+            requestId: id,
+          },
+        );
+      } catch (error) {
+        console.error('Failed to send FCM notification:', error);
+      }
+    }
+
     return { success: true };
   }
 
@@ -386,6 +410,29 @@ export class WalletService {
             note: note ?? '',
           });
       } catch (_) {}
+    }
+
+    // Send FCM notification
+    const user = await this.prisma.user.findUnique({
+      where: { id: request.driverUserId },
+      select: { fcmToken: true },
+    });
+    if (user?.fcmToken) {
+      try {
+        await this.firebaseService.sendNotification(
+          user.fcmToken,
+          'تم رفض طلب شحن الرصيد',
+          `تم رفض طلب شحن رصيدك بمبلغ ${Number(request.amount)} أوقية.${note ? ' السبب: ' + note : ''}`,
+          {
+            type: 'RECHARGE_DENIED',
+            amount: request.amount.toString(),
+            requestId: id,
+            note: note ?? '',
+          },
+        );
+      } catch (error) {
+        console.error('Failed to send FCM notification:', error);
+      }
     }
 
     return { success: true };

@@ -6,6 +6,7 @@ import {
   HttpStatus,
   UseGuards,
   Request,
+  BadRequestException,
 } from '@nestjs/common';
 import { OtpService } from './otp.service';
 import { JwtAuthService } from './jwt.service';
@@ -27,6 +28,9 @@ export class AuthController {
   @Post('send-otp')
   @HttpCode(HttpStatus.OK)
   async sendOtp(@Body() sendOtpDto: SendOtpDto) {
+    // The actual SMS is delivered by Firebase Phone Auth on the client.
+    // This still records a server-side OTP for the legacy DB verification
+    // path (dev/testing); Moon SMS is no longer used.
     await this.otpService.sendOTP(sendOtpDto.phoneNumber);
 
     return {
@@ -38,8 +42,30 @@ export class AuthController {
   @Post('verify-otp')
   @HttpCode(HttpStatus.OK)
   async verifyOtp(@Body() verifyOtpDto: VerifyOtpDto): Promise<AuthResponseDto> {
-    // Verify the 6-digit OTP we sent via Moon SMS.
-    await this.otpService.verifyOTP(verifyOtpDto.phoneNumber, verifyOtpDto.otp);
+    // Firebase Phone Auth is the SMS/OTP provider. The client verifies the
+    // code with Firebase and sends us the resulting ID token, which we verify
+    // with the Firebase Admin SDK. We fall back to the legacy DB-OTP check
+    // only when no Firebase token is supplied (dev/testing).
+    if (verifyOtpDto.firebaseIdToken) {
+      const decoded = await this.jwtAuthService.verifyFirebaseToken(
+        verifyOtpDto.firebaseIdToken,
+      );
+
+      // Ensure the verified Firebase phone number matches the request so a
+      // token issued for one number can't be used to log into another.
+      if (decoded.phone_number !== verifyOtpDto.phoneNumber) {
+        throw new BadRequestException(
+          'Phone number does not match the verified Firebase token.',
+        );
+      }
+    } else {
+      if (!verifyOtpDto.otp) {
+        throw new BadRequestException(
+          'Either firebaseIdToken or otp must be provided.',
+        );
+      }
+      await this.otpService.verifyOTP(verifyOtpDto.phoneNumber, verifyOtpDto.otp);
+    }
 
     // Find or create user with relations
     let user = await this.prisma.user.findUnique({

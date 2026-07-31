@@ -1,6 +1,5 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { MoonSmsService } from './moon-sms.service';
 
 @Injectable()
 export class OtpService {
@@ -9,10 +8,7 @@ export class OtpService {
   private readonly MAX_ATTEMPTS = 3;
   private readonly MAX_REQUESTS_PER_HOUR = 5;
 
-  constructor(
-    private prisma: PrismaService,
-    private sms: MoonSmsService,
-  ) {}
+  constructor(private prisma: PrismaService) {}
 
   generateOTP(): string {
     // 4-digit OTP, zero-padded so it's always exactly 4 chars.
@@ -56,17 +52,15 @@ export class OtpService {
       },
     });
 
-    // Send OTP via Moon SMS (Mauritanian provider, all carriers).
-    try {
-      const messageId = await this.sms.sendOTP(phoneNumber, otp);
-      this.logger.log(`OTP sent via Moon SMS. Message ID: ${messageId || 'OK'}`);
-
-      // DEV MODE: Also log to console
-      this.logger.warn(`🔐 OTP for ${phoneNumber}: ${otp} (expires in ${this.OTP_EXPIRY_MINUTES} minutes)`);
-    } catch (error) {
-      this.logger.error('Failed to send OTP via Moon SMS:', error);
-      throw new BadRequestException('Failed to send OTP. Please try again.');
-    }
+    // SMS delivery is handled by Firebase Phone Auth on the client.
+    // Moon SMS has been disabled, so the backend no longer sends the code
+    // itself. We still generate + persist a code so the legacy DB-OTP
+    // verification path remains usable for development/testing, and we log
+    // it here so it can be retrieved during local testing.
+    this.logger.warn(
+      `🔐 OTP for ${phoneNumber}: ${otp} (expires in ${this.OTP_EXPIRY_MINUTES} minutes). ` +
+        `SMS delivery is handled by Firebase Phone Auth (Moon disabled).`,
+    );
   }
 
   async getOTPForDev(phoneNumber: string): Promise<string | null> {

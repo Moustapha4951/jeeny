@@ -8,11 +8,14 @@ export class VerifyOtpDto {
   })
   phoneNumber!: string;
 
+  // Optional: only used for the legacy DB-OTP path (dev/testing). When the
+  // client authenticates through Firebase Phone Auth it sends firebaseIdToken
+  // instead, and no server-side OTP code is required.
   @IsString()
-  @IsNotEmpty()
+  @IsOptional()
   @Length(4, 4, { message: 'OTP must be exactly 4 digits' })
   @Matches(/^\d{4}$/, { message: 'OTP must contain only digits' })
-  otp!: string;
+  otp?: string;
 
   @IsString()
   @IsOptional()
